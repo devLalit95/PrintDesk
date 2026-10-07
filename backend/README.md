@@ -19,9 +19,12 @@ Set these environment variables before starting the application:
 | `DB_URL` | Yes | JDBC URL for the application database, for example `jdbc:mysql://localhost:3306/printdesk` |
 | `DB_USERNAME` | Yes | Database user with the privileges required to apply Flyway migrations and run the application |
 | `DB_PASSWORD` | Yes | Database password; keep it out of source control and logs |
+| `PRINTDESK_STORAGE_ROOT` | No | Private directory for uploaded files; defaults to `${user.home}/.printdesk/storage` |
 | `SPRING_PROFILES_ACTIVE` | No | Spring profile to activate when an environment-specific profile is introduced |
 
 Create the database before startup. Flyway applies versioned scripts from `src/main/resources/db/migration/`; Hibernate uses `ddl-auto=validate` to check mappings without changing the schema. The initial migration is added with the persistence model.
+
+Uploads are limited to 25 MB per file and the request body limit is 26 MB. The selected initial formats are PDF, DOCX, JPG, and PNG. Files are stored outside the source tree with generated opaque keys; retention/deletion scheduling is not enabled until a retention policy is approved.
 
 The current context-load smoke test uses test-scoped H2 and does not verify MySQL-specific migrations or SQL behavior. MySQL-backed integration tests remain required before considering persistence verified.
 

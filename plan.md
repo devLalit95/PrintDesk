@@ -157,13 +157,13 @@ Tasks are ordered by dependency and module. `[P]` marks work that may proceed in
 
 - [x] T001 [Plan:1.1] Define package boundaries, configuration profiles, and standard API error envelope in `backend/src/main/java/com/example/backend/`.
 - [x] T002 [Plan:1.1] Add required persistence, validation, security, WebSocket, and test dependencies to `backend/pom.xml` after verifying compatibility with the pinned Spring Boot parent; add the migration dependency with T004 after the migration tool is selected.
-- [ ] T003 [P] [Plan:1.1] Document required backend environment variables and local service prerequisites in `backend/README.md`.
+- [x] T003 [P] [Plan:1.1] Document required backend environment variables and local service prerequisites in `backend/README.md`.
 - [x] T004 [Plan:1.2] Add Flyway and MySQL Flyway support with externalized datasource settings and schema validation in `backend/pom.xml` and `backend/src/main/resources/`.
 - [x] T005 [Plan:1.2] Create document, print-order, print-job, printer, agent, admin, print-rate, and audit-event entities under `backend/src/main/java/com/example/backend/entity/`.
 - [x] T006 [Plan:1.2] Define persistence repositories and uniqueness/index constraints under `backend/src/main/java/com/example/backend/repository/`.
 - [x] T007 [Plan:1.2] Add migration scripts for the initial schema under `backend/src/main/resources/db/migration/`.
 - [x] T008 [Plan:1.3] Define upload/request/response DTOs and validation rules under `backend/src/main/java/com/example/backend/dto/`.
-- [ ] T009 [Plan:1.3] Implement secure local file storage adapter and storage-key handling under `backend/src/main/java/com/example/backend/storage/`.
+- [x] T009 [Plan:1.3] Implement secure local file storage adapter and storage-key handling under `backend/src/main/java/com/example/backend/storage/`.
 - [ ] T010 [Plan:1.3] Implement upload validation, file persistence, metadata extraction, and supported-format page counting under `backend/src/main/java/com/example/backend/service/`.
 - [ ] T011 [Plan:1.3] Add upload and authorized document-download endpoints under `backend/src/main/java/com/example/backend/controller/`.
 - [ ] T012 [P] [Plan:1.3] Add focused upload-validation, page-count, storage-path isolation, and unauthorized-download tests under `backend/src/test/java/com/example/backend/`.
@@ -289,7 +289,7 @@ Do not create empty package trees in advance; add directories with the first imp
 
 The SRS gives product-level requirements but does not settle these implementation details. Resolve them before the relevant code is committed; do not silently invent production policy:
 
-1. Accepted formats are PDF, DOCX, JPG, and PNG. Maximum file size, retention/deletion policy, and malware-scanning requirement remain open.
+1. Accepted formats are PDF, DOCX, JPG, and PNG and the maximum size is 25 MB per file. Retention/deletion policy and malware-scanning requirement remain open.
 2. Which formats have reliable page-count extraction and how unsupported/corrupt files are handled.
 3. Flyway and MySQL 8.4 LTS are selected. Local development provisioning and production deployment target remain open.
 4. Admin bootstrap method, JWT lifetime/refresh/revocation policy, and password reset/rotation approach.
