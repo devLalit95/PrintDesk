@@ -6,7 +6,12 @@ import java.util.TreeMap;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import com.example.backend.service.document.DocumentProcessingUnavailableException;
+import com.example.backend.service.document.DocumentStorageException;
+import com.example.backend.service.document.DocumentTooLargeException;
+import com.example.backend.service.document.InvalidDocumentException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -73,8 +78,65 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    @ExceptionHandler(InvalidDocumentException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidDocument(
+            InvalidDocumentException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid document",
+                exception.getMessage(),
+                "urn:printdesk:problem:invalid-document",
+                "INVALID_DOCUMENT",
+                request);
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(DocumentTooLargeException.class)
+    public ResponseEntity<ProblemDetail> handleDocumentTooLarge(
+            DocumentTooLargeException exception,
+            HttpServletRequest request) {
+        HttpStatusCode status = HttpStatusCode.valueOf(413);
+        ProblemDetail problem = createProblem(
+                status,
+                "Document too large",
+                exception.getMessage(),
+                "urn:printdesk:problem:document-too-large",
+                "DOCUMENT_TOO_LARGE",
+                request);
+        return ResponseEntity.status(status).body(problem);
+    }
+
+    @ExceptionHandler(DocumentProcessingUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleDocumentProcessingUnavailable(
+            DocumentProcessingUnavailableException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Document processing unavailable",
+                "The document could not be processed right now. Please retry later.",
+                "urn:printdesk:problem:document-processing-unavailable",
+                "DOCUMENT_PROCESSING_UNAVAILABLE",
+                request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problem);
+    }
+
+    @ExceptionHandler(DocumentStorageException.class)
+    public ResponseEntity<ProblemDetail> handleDocumentStorageFailure(
+            DocumentStorageException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Document storage failed",
+                "The document could not be stored. Please retry later.",
+                "urn:printdesk:problem:document-storage-failure",
+                "DOCUMENT_STORAGE_FAILURE",
+                request);
+        return ResponseEntity.internalServerError().body(problem);
+    }
+
     private ProblemDetail createProblem(
-            HttpStatus status,
+            HttpStatusCode status,
             String title,
             String detail,
             String type,

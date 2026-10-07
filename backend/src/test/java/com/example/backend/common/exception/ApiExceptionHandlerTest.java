@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
+import com.example.backend.service.document.DocumentTooLargeException;
+import com.example.backend.service.document.InvalidDocumentException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ProblemDetail;
@@ -60,5 +62,30 @@ class ApiExceptionHandlerTest {
         assertEquals("INVALID_REQUEST", problem.getProperties().get("code"));
         assertEquals("The request body is missing or malformed.", problem.getDetail());
         assertFalse(problem.toString().contains("password"));
+    }
+
+    @Test
+    void oversizedDocumentReturnsPayloadTooLargeProblem() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/documents/upload");
+
+        var response = handler.handleDocumentTooLarge(new DocumentTooLargeException(25_000_000), request);
+
+        assertEquals(413, response.getStatusCode().value());
+        assertEquals("DOCUMENT_TOO_LARGE", response.getBody().getProperties().get("code"));
+    }
+
+    @Test
+    void invalidDocumentReturnsNonSensitiveClientError() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/documents/upload");
+
+        var response = handler.handleInvalidDocument(
+                new InvalidDocumentException("Only PDF documents are accepted."),
+                request);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals("INVALID_DOCUMENT", response.getBody().getProperties().get("code"));
+        assertEquals("Only PDF documents are accepted.", response.getBody().getDetail());
     }
 }

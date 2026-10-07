@@ -5,10 +5,10 @@ metadata:
 
 summary:
   total_tasks: 54
-  completed_tasks: 8
+  completed_tasks: 9
   in_progress_tasks: 0
-  pending_tasks: 46
-  completion_percentage: 14.8
+  pending_tasks: 45
+  completion_percentage: 16.7
 
 tasks:
   - task_id: "T001"
@@ -227,15 +227,61 @@ tasks:
       plan_item: "1.3"
       requirements: ["REQ-001", "REQ-002"]
       full_trace: "REQ-001,REQ-002 -> Phase-1.3 -> T008 -> upload DTOs and validation test"
-
-pending_tasks:
   - task_id: "T009"
     description: "Implement secure local file storage adapter"
-    blocked_by: ["File handling policy decisions"]
-    priority: "P1"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/storage/DocumentStorage.java"
+          changes:
+            - change_type: "added"
+              description: "Defined storage operations and stored-document metadata contract."
+        - file: "backend/src/main/java/com/example/backend/storage/LocalDocumentStorage.java"
+          changes:
+            - change_type: "added"
+              description: "Added UUID-keyed sharded storage, bounded streaming, SHA-256 digesting, atomic writes, safe reads, and deletion."
+        - file: "backend/src/main/java/com/example/backend/storage/DocumentStorageProperties.java"
+          changes:
+            - change_type: "added"
+              description: "Added validated storage root and maximum file-size configuration."
+        - file: "backend/src/main/java/com/example/backend/storage/DocumentStorageConfiguration.java"
+          changes:
+            - change_type: "added"
+              description: "Registered the local storage adapter using externalized configuration."
+        - file: "backend/src/main/java/com/example/backend/storage/StoredDocument.java"
+          changes:
+            - change_type: "added"
+              description: "Represented generated key, byte size, and content digest."
+        - file: "backend/src/main/java/com/example/backend/storage/StorageLimitExceededException.java"
+          changes:
+            - change_type: "added"
+              description: "Reported bounded-stream size-limit rejection."
+        - file: "backend/src/main/resources/application.properties"
+          changes:
+            - change_type: "modified"
+              description: "Set multipart limits to 25 MB per file and 26 MB per request and configured private local storage defaults."
+        - file: "backend/src/test/java/com/example/backend/storage/LocalDocumentStorageTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tested content/digest, oversized stream cleanup, invalid storage keys, and deletion."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 10
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Full backend suite passes. H2 MySQL mode is a schema smoke check only; actual MySQL 8.4 is not verified."
+    upstream_trace:
+      plan_item: "1.3"
+      requirements: ["REQ-001", "REQ-002"]
+      full_trace: "REQ-001,REQ-002 -> Phase-1.3 -> T009 -> private local storage adapter and storage tests"
+
+pending_tasks:
   - task_id: "T010"
     description: "Implement upload validation, metadata, and page counting"
-    blocked_by: ["T008", "T009", "File format decisions"]
+    blocked_by: ["T008", "T009", "Page-count behavior decision"]
     priority: "P1"
   - task_id: "T011"
     description: "Add upload and authorized document download endpoints"

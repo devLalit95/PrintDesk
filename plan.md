@@ -287,10 +287,10 @@ Do not create empty package trees in advance; add directories with the first imp
 
 ## 9. Decisions required before implementation
 
-The SRS gives product-level requirements but does not settle these implementation details. Resolve them before the relevant code is committed; do not silently invent production policy:
+The SRS gives product-level requirements but does not settle these implementation details. Resolve them before the relevant code is committed; record selected decisions and do not silently invent production policy:
 
 1. Accepted formats are PDF, DOCX, JPG, and PNG and the maximum size is 25 MB per file. Retention/deletion policy and malware-scanning requirement remain open.
-2. Which formats have reliable page-count extraction and how unsupported/corrupt files are handled.
+2. Resolved per user: PDF pages are counted with PDFBox; validated JPG/PNG images count as one page; validated DOCX files are converted to PDF with LibreOffice for rendered page count. DOCX conversion times out after 30 seconds and fails closed if LibreOffice cannot run; malformed/unsupported content is rejected.
 3. Flyway and MySQL 8.4 LTS are selected. Local development provisioning and production deployment target remain open.
 4. Admin bootstrap method, JWT lifetime/refresh/revocation policy, and password reset/rotation approach.
 5. Agent credential issuance/rotation/revocation and whether a deployment has one or multiple agents from day one.

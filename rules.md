@@ -82,5 +82,4 @@ These rules guide implementation of the Version 1 online document printing syste
 
 ## 9. Requirements gaps are explicit
 
-The following decisions remain open in [plan.md](./plan.md): supported MIME types and file size/retention; page-count behavior for each format; MySQL/migration/deployment versions; admin and agent credential lifecycle; WebSocket security; operating systems/printers; retry and ambiguous outcome handling; token policy; money rounding; browser/accessibility support and E2E runner. Resolve a decision before implementing the affected behavior and record it here or in the SRS.
-
+The following decisions remain open in [plan.md](./plan.md): retention/deletion and malware scanning; MySQL-backed integration/deployment target; admin and agent credential lifecycle; WebSocket security; operating systems/printers; retry and ambiguous outcome handling; token policy; money rounding; browser/accessibility support and E2E runner. Upload policy is selected: PDF, DOCX, JPG, and PNG, maximum 25 MB; PDF pages use PDFBox, raster images count as one page, and DOCX pages use LibreOffice conversion. DOCX processing must fail closed when conversion is unavailable.
