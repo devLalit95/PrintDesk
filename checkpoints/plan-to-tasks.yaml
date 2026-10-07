@@ -1,0 +1,162 @@
+# Plan-to-task traceability checkpoint for tasks embedded in plan.md.
+metadata:
+  generated: "2026-10-07"
+  source_plan: "plan.md"
+  target_tasks: "plan.md (Section 6)"
+
+summary:
+  total_plan_items: 18
+  covered_plan_items: 18
+  missing_plan_items: 0
+  coverage_percentage: 100.0
+  total_tasks_generated: 54
+  orphan_tasks: 0
+
+phases:
+  - phase_id: "Phase-1"
+    phase_name: "Backend"
+    items:
+      - item_id: "1.1"
+        description: "Backend application foundation"
+        tasks: ["T001", "T002", "T003"]
+      - item_id: "1.2"
+        description: "Core persistence model"
+        tasks: ["T004", "T005", "T006", "T007"]
+      - item_id: "1.3"
+        description: "Secure document intake and storage"
+        tasks: ["T008", "T009", "T010", "T011", "T012"]
+      - item_id: "1.4"
+        description: "Pricing and print-order domain"
+        tasks: ["T013", "T014", "T015", "T016"]
+      - item_id: "1.5"
+        description: "Admin identity and authorization"
+        tasks: ["T017", "T018", "T019"]
+      - item_id: "1.6"
+        description: "Admin operations and configuration APIs"
+        tasks: ["T020", "T021", "T022", "T023"]
+      - item_id: "1.7"
+        description: "Durable print queue and agent contract"
+        tasks: ["T024", "T025", "T026", "T027", "T028"]
+  - phase_id: "Phase-2"
+    phase_name: "Java Print Agent"
+    items:
+      - item_id: "2.1"
+        description: "Agent scaffold and secure enrollment"
+        tasks: ["T029", "T030"]
+      - item_id: "2.2"
+        description: "Printer discovery and selection"
+        tasks: ["T031", "T032"]
+      - item_id: "2.3"
+        description: "Job download, validation, and physical print"
+        tasks: ["T033", "T034", "T036"]
+      - item_id: "2.4"
+        description: "Recovery, status, and safe retries"
+        tasks: ["T035", "T036"]
+  - phase_id: "Phase-3"
+    phase_name: "Frontend"
+    items:
+      - item_id: "3.1"
+        description: "UI foundation, routing, and shared API layer"
+        tasks: ["T037", "T038", "T039", "T046"]
+      - item_id: "3.2"
+        description: "Customer upload and print configuration"
+        tasks: ["T040", "T041", "T046", "T047"]
+      - item_id: "3.3"
+        description: "Order submission, token confirmation, and status lookup"
+        tasks: ["T042", "T046", "T047"]
+      - item_id: "3.4"
+        description: "Admin login, dashboard, and order actions"
+        tasks: ["T043", "T044", "T046", "T047"]
+      - item_id: "3.5"
+        description: "Printer, pricing, and agent management"
+        tasks: ["T045", "T046", "T047"]
+  - phase_id: "Phase-4"
+    phase_name: "Integration and readiness"
+    items:
+      - item_id: "4.1"
+        description: "Contract and end-to-end validation"
+        tasks: ["T048", "T049", "T050", "T051", "T052"]
+      - item_id: "4.2"
+        description: "Deployment/configuration and handover"
+        tasks: ["T053", "T054"]
+
+missing_plan_items: []
+orphan_tasks: []
+upstream_trace:
+  - plan_item: "1.1"
+    source_requirements: ["REQ-005", "REQ-015", "REQ-017"]
+    tasks: ["T001", "T002", "T003"]
+    full_trace: "REQ-005,REQ-015,REQ-017 -> Phase-1.1 -> T001,T002,T003"
+  - plan_item: "1.2"
+    source_requirements: ["REQ-002", "REQ-005", "REQ-008", "REQ-011", "REQ-012", "REQ-014", "REQ-015"]
+    tasks: ["T004", "T005", "T006", "T007"]
+    full_trace: "REQ-002,REQ-005,REQ-008,REQ-011,REQ-012,REQ-014,REQ-015 -> Phase-1.2 -> T004,T005,T006,T007"
+  - plan_item: "1.3"
+    source_requirements: ["REQ-001", "REQ-002", "REQ-015", "REQ-016"]
+    tasks: ["T008", "T009", "T010", "T011", "T012"]
+    full_trace: "REQ-001,REQ-002,REQ-015,REQ-016 -> Phase-1.3 -> T008,T009,T010,T011,T012"
+  - plan_item: "1.4"
+    source_requirements: ["REQ-003", "REQ-004", "REQ-005", "REQ-006", "REQ-015"]
+    tasks: ["T013", "T014", "T015", "T016"]
+    full_trace: "REQ-003,REQ-004,REQ-005,REQ-006,REQ-015 -> Phase-1.4 -> T013,T014,T015,T016"
+  - plan_item: "1.5"
+    source_requirements: ["REQ-007", "REQ-015"]
+    tasks: ["T017", "T018", "T019"]
+    full_trace: "REQ-007,REQ-015 -> Phase-1.5 -> T017,T018,T019"
+  - plan_item: "1.6"
+    source_requirements: ["REQ-004", "REQ-008", "REQ-009", "REQ-011", "REQ-015"]
+    tasks: ["T020", "T021", "T022", "T023"]
+    full_trace: "REQ-004,REQ-008,REQ-009,REQ-011,REQ-015 -> Phase-1.6 -> T020,T021,T022,T023"
+  - plan_item: "1.7"
+    source_requirements: ["REQ-009", "REQ-010", "REQ-012", "REQ-014", "REQ-017"]
+    tasks: ["T024", "T025", "T026", "T027", "T028"]
+    full_trace: "REQ-009,REQ-010,REQ-012,REQ-014,REQ-017 -> Phase-1.7 -> T024,T025,T026,T027,T028"
+  - plan_item: "2.1"
+    source_requirements: ["REQ-010", "REQ-014", "REQ-017"]
+    tasks: ["T029", "T030"]
+    full_trace: "REQ-010,REQ-014,REQ-017 -> Phase-2.1 -> T029,T030"
+  - plan_item: "2.2"
+    source_requirements: ["REQ-011", "REQ-013"]
+    tasks: ["T031", "T032"]
+    full_trace: "REQ-011,REQ-013 -> Phase-2.2 -> T031,T032"
+  - plan_item: "2.3"
+    source_requirements: ["REQ-010", "REQ-012", "REQ-013", "REQ-014"]
+    tasks: ["T033", "T034", "T036"]
+    full_trace: "REQ-010,REQ-012,REQ-013,REQ-014 -> Phase-2.3 -> T033,T034,T036"
+  - plan_item: "2.4"
+    source_requirements: ["REQ-009", "REQ-012", "REQ-014"]
+    tasks: ["T035", "T036"]
+    full_trace: "REQ-009,REQ-012,REQ-014 -> Phase-2.4 -> T035,T036"
+  - plan_item: "3.1"
+    source_requirements: ["REQ-006", "REQ-007", "REQ-008", "REQ-017"]
+    tasks: ["T037", "T038", "T039", "T046"]
+    full_trace: "REQ-006,REQ-007,REQ-008,REQ-017 -> Phase-3.1 -> T037,T038,T039,T046"
+  - plan_item: "3.2"
+    source_requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004"]
+    tasks: ["T040", "T041", "T046", "T047"]
+    full_trace: "REQ-001,REQ-002,REQ-003,REQ-004 -> Phase-3.2 -> T040,T041,T046,T047"
+  - plan_item: "3.3"
+    source_requirements: ["REQ-005", "REQ-006"]
+    tasks: ["T042", "T046", "T047"]
+    full_trace: "REQ-005,REQ-006 -> Phase-3.3 -> T042,T046,T047"
+  - plan_item: "3.4"
+    source_requirements: ["REQ-007", "REQ-008", "REQ-009"]
+    tasks: ["T043", "T044", "T046", "T047"]
+    full_trace: "REQ-007,REQ-008,REQ-009 -> Phase-3.4 -> T043,T044,T046,T047"
+  - plan_item: "3.5"
+    source_requirements: ["REQ-004", "REQ-008", "REQ-010", "REQ-011"]
+    tasks: ["T045", "T046", "T047"]
+    full_trace: "REQ-004,REQ-008,REQ-010,REQ-011 -> Phase-3.5 -> T045,T046,T047"
+  - plan_item: "4.1"
+    source_requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005", "REQ-006", "REQ-007", "REQ-008", "REQ-009", "REQ-010", "REQ-011", "REQ-012", "REQ-013", "REQ-014", "REQ-015", "REQ-016"]
+    tasks: ["T048", "T049", "T050", "T051", "T052"]
+    full_trace: "REQ-001..REQ-016 -> Phase-4.1 -> T048,T049,T050,T051,T052"
+  - plan_item: "4.2"
+    source_requirements: ["REQ-015", "REQ-016", "REQ-017", "REQ-018"]
+    tasks: ["T053", "T054"]
+    full_trace: "REQ-015,REQ-016,REQ-017,REQ-018 -> Phase-4.2 -> T053,T054"
+
+validation:
+  passed: true
+  errors: []
+  warnings: []

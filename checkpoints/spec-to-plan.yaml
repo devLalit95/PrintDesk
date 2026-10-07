@@ -1,0 +1,129 @@
+# Traceability checkpoint for the SRS-derived requirement aliases in plan.md.
+metadata:
+  generated: "2026-10-07"
+  source_spec: "SRS.md"
+  target_plan: "plan.md"
+
+summary:
+  total_requirements: 18
+  covered_requirements: 18
+  missing_requirements: 0
+  coverage_percentage: 100.0
+
+requirements:
+  - req_id: "REQ-001"
+    req_description: "Secure document upload and validation"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 and Phase 3"
+      items: ["1.3", "3.2", "4.1"]
+  - req_id: "REQ-002"
+    req_description: "Document metadata and supported page-count detection"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 and Phase 3"
+      items: ["1.2", "1.3", "3.2", "4.1"]
+  - req_id: "REQ-003"
+    req_description: "Print preferences and supported advanced options"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 through Phase 3"
+      items: ["1.4", "2.3", "3.2"]
+  - req_id: "REQ-004"
+    req_description: "Server-side price calculation and configurable rates"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 and Phase 3"
+      items: ["1.4", "1.6", "3.2", "3.5"]
+  - req_id: "REQ-005"
+    req_description: "Persistent orders and unique tokens"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 and Phase 4"
+      items: ["1.2", "1.4", "4.1"]
+  - req_id: "REQ-006"
+    req_description: "Customer confirmation and token-based status lookup"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 and Phase 3"
+      items: ["1.4", "3.3", "4.1"]
+  - req_id: "REQ-007"
+    req_description: "Secure administrator authentication and role authorization"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1, Phase 3, and Phase 4"
+      items: ["1.5", "1.6", "3.4", "4.1"]
+  - req_id: "REQ-008"
+    req_description: "Administrator dashboard, search, filters, history, and statistics"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 and Phase 3"
+      items: ["1.6", "3.4", "4.1"]
+  - req_id: "REQ-009"
+    req_description: "Admin print, retry, and cancel actions"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 through Phase 4"
+      items: ["1.6", "1.7", "2.4", "3.4", "4.1"]
+  - req_id: "REQ-010"
+    req_description: "Authenticated Print Agent communication and status"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 through Phase 4"
+      items: ["1.7", "2.1", "2.3", "2.4", "3.5", "4.1"]
+  - req_id: "REQ-011"
+    req_description: "Printer discovery and configuration"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 through Phase 3"
+      items: ["1.2", "1.6", "2.2", "3.5"]
+  - req_id: "REQ-012"
+    req_description: "Sequential durable print queue"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1, Phase 2, and Phase 4"
+      items: ["1.2", "1.7", "2.4", "4.1"]
+  - req_id: "REQ-013"
+    req_description: "Silent local OS printing without browser print UI"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 2 and Phase 4"
+      items: ["2.2", "2.3", "4.1"]
+  - req_id: "REQ-014"
+    req_description: "Failure reporting, reconnection, and controlled retries"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 1 through Phase 4"
+      items: ["1.2", "1.7", "2.1", "2.4", "3.4", "4.1"]
+  - req_id: "REQ-015"
+    req_description: "Security, file access control, and administrative auditability"
+    priority: "P1"
+    plan_mapping:
+      phase: "All phases"
+      items: ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "2.1", "2.3", "3.1", "3.4", "3.5", "4.2"]
+  - req_id: "REQ-016"
+    req_description: "Performance and reliability requirements"
+    priority: "P1"
+    plan_mapping:
+      phase: "All phases"
+      items: ["1.3", "1.7", "2.4", "3.2", "4.1", "4.2"]
+  - req_id: "REQ-017"
+    req_description: "Separate maintainable modules and future multi-agent readiness"
+    priority: "P1"
+    plan_mapping:
+      phase: "All phases"
+      items: ["1.1", "1.7", "2.1", "2.2", "2.3", "2.4", "3.1", "4.2"]
+  - req_id: "REQ-018"
+    req_description: "Keep payment deferred and architecturally separate"
+    priority: "P1"
+    plan_mapping:
+      phase: "Phase 4"
+      items: ["4.2"]
+
+missing_requirements: []
+orphan_plan_items: []
+validation:
+  passed: true
+  errors: []
+  warnings:
+    - "REQ-XXX identifiers are aliases created for traceability because SRS.md does not define requirement IDs."

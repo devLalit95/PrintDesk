@@ -1,0 +1,464 @@
+metadata:
+  generated: "2026-10-08"
+  source_tasks: "plan.md (Section 6)"
+  last_updated: "2026-10-08"
+
+summary:
+  total_tasks: 54
+  completed_tasks: 8
+  in_progress_tasks: 0
+  pending_tasks: 46
+  completion_percentage: 14.8
+
+tasks:
+  - task_id: "T001"
+    description: "Define backend package/error response foundation"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/common/exception/ApiExceptionHandler.java"
+          changes:
+            - change_type: "added"
+              description: "Centralized RFC 9457-style request validation and malformed-body errors"
+        - file: "backend/src/test/java/com/example/backend/common/exception/ApiExceptionHandlerTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests stable, non-sensitive problem response shape"
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 3
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Baseline with shell-default Java 17 could not compile Java 21; rerun with installed Java 21 passed."
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: ["REQ-015"]
+      full_trace: "REQ-015 -> Phase-1.1 -> T001 -> ApiExceptionHandler.java and ApiExceptionHandlerTest.java"
+  - task_id: "T002"
+    description: "Add required backend runtime and test dependencies"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/pom.xml"
+          changes:
+            - change_type: "modified"
+              description: "Added Actuator, JPA, Security, Validation, WebSocket, MySQL, security test, and test-scoped H2 dependencies"
+        - file: "backend/src/main/resources/application.properties"
+          changes:
+            - change_type: "modified"
+              description: "Enabled Problem Details, disabled sensitive default error fields, and limited Actuator web exposure"
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Configured an isolated in-memory datasource for the application context smoke test"
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 3
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Dependency tree resolved. H2 is only for context smoke testing; MySQL integration tests remain required."
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: ["REQ-005", "REQ-015", "REQ-017"]
+      full_trace: "REQ-005,REQ-015,REQ-017 -> Phase-1.1 -> T002 -> backend/pom.xml and application.properties"
+  - task_id: "T003"
+    description: "Document backend environment variables and local prerequisites"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/README.md"
+          changes:
+            - change_type: "added"
+              description: "Documents Java/Maven requirements, datasource variables, and current migration setup."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test dependency:tree"
+        passed: 3
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Documentation matches required DB_URL, DB_USERNAME, and DB_PASSWORD configuration."
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: ["REQ-015", "REQ-017"]
+      full_trace: "REQ-015,REQ-017 -> Phase-1.1 -> T003 -> backend/README.md"
+  - task_id: "T004"
+    description: "Configure Flyway schema migration support"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/pom.xml"
+          changes:
+            - change_type: "modified"
+              description: "Added Spring Boot Flyway starter and MySQL Flyway database support."
+        - file: "backend/src/main/resources/application.properties"
+          changes:
+            - change_type: "modified"
+              description: "Added environment-based datasource properties, Flyway location, Hibernate validation, and disabled Open Session in View."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Provided test-only H2 URL and credentials for application context smoke test."
+        - file: "backend/README.md"
+          changes:
+            - change_type: "modified"
+              description: "Documented Flyway migration behavior and MySQL verification boundary."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test dependency:tree"
+        passed: 3
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Flyway MySQL and MySQL JDBC dependencies resolved; initial migration will be added with the entity model."
+    upstream_trace:
+      plan_item: "1.2"
+      requirements: ["REQ-002", "REQ-005"]
+      full_trace: "REQ-002,REQ-005 -> Phase-1.2 -> T004 -> pom.xml and application.properties"
+  - task_id: "T005"
+    description: "Create core persistence entities"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/entity/"
+          changes:
+            - change_type: "added"
+              description: "Added entities and enums for admin, document, order, rates, print jobs, printers, agents, and audit events."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 4
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Hibernate validated all entity mappings against the V1 migration on H2 MySQL mode."
+    upstream_trace:
+      plan_item: "1.2"
+      requirements: ["REQ-002", "REQ-005", "REQ-008", "REQ-011", "REQ-012", "REQ-014", "REQ-015"]
+      full_trace: "REQ-002,REQ-005,REQ-008,REQ-011,REQ-012,REQ-014,REQ-015 -> Phase-1.2 -> T005 -> backend/src/main/java/com/example/backend/entity/"
+  - task_id: "T006"
+    description: "Define persistence repositories and database constraints"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/repository/"
+          changes:
+            - change_type: "added"
+              description: "Added bounded/pageable repository query methods and token/storage-key lookups."
+        - file: "backend/src/main/resources/db/migration/V1__create_printdesk_core_schema.sql"
+          changes:
+            - change_type: "added"
+              description: "Added unique constraints, indexes, foreign keys, and basic data checks."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 4
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Repository method parsing and Hibernate mapping validation pass at application startup."
+    upstream_trace:
+      plan_item: "1.2"
+      requirements: ["REQ-005", "REQ-008", "REQ-011", "REQ-012", "REQ-014"]
+      full_trace: "REQ-005,REQ-008,REQ-011,REQ-012,REQ-014 -> Phase-1.2 -> T006 -> repositories and V1 schema"
+  - task_id: "T007"
+    description: "Add initial schema migration"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/resources/db/migration/V1__create_printdesk_core_schema.sql"
+          changes:
+            - change_type: "added"
+              description: "Created eight core tables for MySQL 8.4 LTS with keys, relationships, indexes, checks, and timestamps."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Added assertion that Flyway applied the initial schema migration."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 4
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "V1 migration and Hibernate schema validation pass in H2 MySQL mode. No actual MySQL server was used."
+    upstream_trace:
+      plan_item: "1.2"
+      requirements: ["REQ-002", "REQ-005", "REQ-008", "REQ-011", "REQ-012", "REQ-014"]
+      full_trace: "REQ-002,REQ-005,REQ-008,REQ-011,REQ-012,REQ-014 -> Phase-1.2 -> T007 -> V1 migration"
+  - task_id: "T008"
+    description: "Define upload DTOs and validation rules"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/dto/document/UploadDocumentRequest.java"
+          changes:
+            - change_type: "added"
+              description: "Added multipart upload request with required-file validation."
+        - file: "backend/src/main/java/com/example/backend/dto/document/DocumentUploadResponse.java"
+          changes:
+            - change_type: "added"
+              description: "Added upload metadata response contract."
+        - file: "backend/src/test/java/com/example/backend/dto/document/UploadDocumentRequestTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tested missing and supplied file request validation."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 6
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "File type, size, and retention policy are enforced in later upload/storage tasks."
+    upstream_trace:
+      plan_item: "1.3"
+      requirements: ["REQ-001", "REQ-002"]
+      full_trace: "REQ-001,REQ-002 -> Phase-1.3 -> T008 -> upload DTOs and validation test"
+
+pending_tasks:
+  - task_id: "T009"
+    description: "Implement secure local file storage adapter"
+    blocked_by: ["File handling policy decisions"]
+    priority: "P1"
+  - task_id: "T010"
+    description: "Implement upload validation, metadata, and page counting"
+    blocked_by: ["T008", "T009", "File format decisions"]
+    priority: "P1"
+  - task_id: "T011"
+    description: "Add upload and authorized document download endpoints"
+    blocked_by: ["T010", "Authentication policy"]
+    priority: "P1"
+  - task_id: "T012"
+    description: "Test upload validation and protected file access"
+    blocked_by: ["T010", "T011"]
+    priority: "P1"
+  - task_id: "T013"
+    description: "Implement rate lookup and server-side price calculation"
+    blocked_by: ["Rate rounding decision", "T005"]
+    priority: "P1"
+  - task_id: "T014"
+    description: "Implement tokens, orders, transitions, and status lookup"
+    blocked_by: ["T005", "Token policy decision"]
+    priority: "P1"
+  - task_id: "T015"
+    description: "Add customer pricing, order, and status endpoints"
+    blocked_by: ["T013", "T014"]
+    priority: "P1"
+  - task_id: "T016"
+    description: "Test pricing, uniqueness, order validation, and transitions"
+    blocked_by: ["T013", "T014"]
+    priority: "P1"
+  - task_id: "T017"
+    description: "Implement admin credential verification and token issuance"
+    blocked_by: ["Admin credential policy decision"]
+    priority: "P1"
+  - task_id: "T018"
+    description: "Configure route authorization and security errors"
+    blocked_by: ["T017"]
+    priority: "P1"
+  - task_id: "T019"
+    description: "Test authentication and role boundaries"
+    blocked_by: ["T017", "T018"]
+    priority: "P1"
+  - task_id: "T020"
+    description: "Implement admin order query and dashboard APIs"
+    blocked_by: ["T014", "T018"]
+    priority: "P1"
+  - task_id: "T021"
+    description: "Implement printer and pricing administration APIs"
+    blocked_by: ["T005", "T018"]
+    priority: "P1"
+  - task_id: "T022"
+    description: "Implement guarded print, retry, and cancel operations"
+    blocked_by: ["T018", "T024"]
+    priority: "P1"
+  - task_id: "T023"
+    description: "Test admin queries and action eligibility"
+    blocked_by: ["T020", "T021", "T022"]
+    priority: "P1"
+  - task_id: "T024"
+    description: "Implement persistent queue, serialized claims, and recovery"
+    blocked_by: ["T004", "T005", "T007", "Queue recovery policy decision"]
+    priority: "P1"
+  - task_id: "T025"
+    description: "Implement agent registration, configuration, heartbeat, and job status APIs"
+    blocked_by: ["T018", "Agent credential policy decision"]
+    priority: "P1"
+  - task_id: "T026"
+    description: "Implement authenticated WebSocket notifications"
+    blocked_by: ["T025", "WebSocket security decision"]
+    priority: "P1"
+  - task_id: "T027"
+    description: "Document API and agent event contracts"
+    blocked_by: ["T015", "T020", "T025", "T026"]
+    priority: "P1"
+  - task_id: "T028"
+    description: "Test queue serialization, recovery, retry, and authorization"
+    blocked_by: ["T024", "T025", "T026"]
+    priority: "P1"
+  - task_id: "T029"
+    description: "Create Print Agent Java Maven application"
+    blocked_by: ["T027", "Supported OS decision"]
+    priority: "P1"
+  - task_id: "T030"
+    description: "Implement agent configuration, authentication, and reconnect"
+    blocked_by: ["T029"]
+    priority: "P1"
+  - task_id: "T031"
+    description: "Implement host printer discovery"
+    blocked_by: ["T029", "Supported OS decision"]
+    priority: "P1"
+  - task_id: "T032"
+    description: "Test printer discovery through an injectable provider"
+    blocked_by: ["T031"]
+    priority: "P1"
+  - task_id: "T033"
+    description: "Implement agent job notification and secure download"
+    blocked_by: ["T027", "T030"]
+    priority: "P1"
+  - task_id: "T034"
+    description: "Implement OS print adapter"
+    blocked_by: ["T033", "Supported OS/printer decision"]
+    priority: "P1"
+  - task_id: "T035"
+    description: "Implement status reporting and safe recovery"
+    blocked_by: ["T033", "T034", "Retry policy decision"]
+    priority: "P1"
+  - task_id: "T036"
+    description: "Test fake-printer execution and recovery"
+    blocked_by: ["T033", "T034", "T035"]
+    priority: "P1"
+  - task_id: "T037"
+    description: "Add MUI and create frontend theme and route structure"
+    blocked_by: ["T027"]
+    priority: "P1"
+  - task_id: "T038"
+    description: "Create centralized Axios client and API modules"
+    blocked_by: ["T027"]
+    priority: "P1"
+  - task_id: "T039"
+    description: "Add scoped frontend stores"
+    blocked_by: ["T037", "T038"]
+    priority: "P1"
+  - task_id: "T040"
+    description: "Implement real customer file upload and progress"
+    blocked_by: ["T011", "T038"]
+    priority: "P1"
+  - task_id: "T041"
+    description: "Connect print settings and server estimate"
+    blocked_by: ["T015", "T038"]
+    priority: "P1"
+  - task_id: "T042"
+    description: "Implement server-backed order confirmation and token lookup"
+    blocked_by: ["T015", "T038"]
+    priority: "P1"
+  - task_id: "T043"
+    description: "Implement admin login and protected frontend routes"
+    blocked_by: ["T017", "T018", "T038"]
+    priority: "P1"
+  - task_id: "T044"
+    description: "Implement admin dashboard and order actions"
+    blocked_by: ["T020", "T022", "T038", "T043"]
+    priority: "P1"
+  - task_id: "T045"
+    description: "Implement printer, agent, and pricing management UI"
+    blocked_by: ["T021", "T025", "T038", "T043"]
+    priority: "P1"
+  - task_id: "T046"
+    description: "Ensure responsive and accessible frontend behavior"
+    blocked_by: ["T040", "T041", "T042", "T043", "T044", "T045"]
+    priority: "P1"
+  - task_id: "T047"
+    description: "Test customer/admin frontend flows"
+    blocked_by: ["T040", "T041", "T042", "T044", "T045"]
+    priority: "P1"
+  - task_id: "T048"
+    description: "Run MySQL-backed backend integration tests"
+    blocked_by: ["T007", "T028"]
+    priority: "P1"
+  - task_id: "T049"
+    description: "Validate backend-to-agent integration"
+    blocked_by: ["T027", "T036"]
+    priority: "P1"
+  - task_id: "T050"
+    description: "Verify customer browser workflows"
+    blocked_by: ["T040", "T041", "T042", "E2E runner decision"]
+    priority: "P1"
+  - task_id: "T051"
+    description: "Verify physical printing on supported hardware"
+    blocked_by: ["T034", "T035", "Supported OS/printer decision"]
+    priority: "P1"
+  - task_id: "T052"
+    description: "Run all backend, frontend, and agent checks"
+    blocked_by: ["T048", "T049", "T050", "T051"]
+    priority: "P1"
+  - task_id: "T053"
+    description: "Document local setup and operational configuration"
+    blocked_by: ["T052"]
+    priority: "P1"
+  - task_id: "T054"
+    description: "Review release against SRS acceptance and scope"
+    blocked_by: ["T052", "T053"]
+    priority: "P1"
+untracked_changes: []
+traceability_chain:
+  - chain_id: "TRACE-REQ-015-T001"
+    requirement: "REQ-015"
+    plan_phase: "Phase-1"
+    plan_item: "1.1"
+    tasks: ["T001"]
+    files:
+      - "backend/src/main/java/com/example/backend/common/exception/ApiExceptionHandler.java"
+      - "backend/src/test/java/com/example/backend/common/exception/ApiExceptionHandlerTest.java"
+    status: "partial"
+  - chain_id: "TRACE-REQ-005-REQ-015-REQ-017-T002"
+    requirement: "REQ-005, REQ-015, REQ-017"
+    plan_phase: "Phase-1"
+    plan_item: "1.1"
+    tasks: ["T002"]
+    files:
+      - "backend/pom.xml"
+      - "backend/src/main/resources/application.properties"
+      - "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+    status: "partial"
+  - chain_id: "TRACE-REQ-002-REQ-005-REQ-008-REQ-011-REQ-012-REQ-014-REQ-015-T005-T007"
+    requirement: "REQ-002, REQ-005, REQ-008, REQ-011, REQ-012, REQ-014, REQ-015"
+    plan_phase: "Phase-1"
+    plan_item: "1.2"
+    tasks: ["T005", "T006", "T007"]
+    files:
+      - "backend/src/main/java/com/example/backend/entity/"
+      - "backend/src/main/java/com/example/backend/repository/"
+      - "backend/src/main/resources/db/migration/V1__create_printdesk_core_schema.sql"
+    status: "partial"
+  - chain_id: "TRACE-REQ-001-REQ-002-T008"
+    requirement: "REQ-001, REQ-002"
+    plan_phase: "Phase-1"
+    plan_item: "1.3"
+    tasks: ["T008"]
+    files:
+      - "backend/src/main/java/com/example/backend/dto/document/UploadDocumentRequest.java"
+      - "backend/src/main/java/com/example/backend/dto/document/DocumentUploadResponse.java"
+      - "backend/src/test/java/com/example/backend/dto/document/UploadDocumentRequestTest.java"
+    status: "partial"
+
+validation:
+  passed: true
+  errors: []
+  warnings:
+    - "The migration has only been verified under H2 MySQL mode; test against a real MySQL 8.4 instance."
+    - "Maximum upload size and document retention/deletion policy remain undecided."
+  blocking_issues: []
