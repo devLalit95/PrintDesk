@@ -37,7 +37,7 @@ These rules guide implementation of the Version 1 online document printing syste
 - Accept only explicitly approved file types and enforce a configured file-size limit on the server.
 - Generate storage names/keys; never trust client filenames as filesystem paths.
 - Store document bytes outside public static directories. Persist only metadata and an opaque storage key in the database.
-- Download requires authorization appropriate to the caller and associated order/agent. Changing an ID or token must not grant access to another customer’s file.
+- Download is limited to an authenticated administrator or the authenticated Print Agent assigned to a job for the document. An unrelated agent must not learn whether a document ID exists by changing a URL.
 - Do not log file contents, secrets, authentication tokens, or unnecessary personal data.
 - Define retention and deletion behavior before production deployment; do not invent a silent retention policy.
 
@@ -82,4 +82,4 @@ These rules guide implementation of the Version 1 online document printing syste
 
 ## 9. Requirements gaps are explicit
 
-The following decisions remain open in [plan.md](./plan.md): retention/deletion and malware scanning; MySQL-backed integration/deployment target; admin and agent credential lifecycle; WebSocket security; operating systems/printers; retry and ambiguous outcome handling; token policy; money rounding; browser/accessibility support and E2E runner. Upload policy is selected: PDF, DOCX, JPG, and PNG, maximum 25 MB; PDF pages use PDFBox, raster images count as one page, and DOCX pages use LibreOffice conversion. DOCX processing must fail closed when conversion is unavailable.
+The following decisions remain open in [plan.md](./plan.md): retention/deletion and malware scanning; MySQL-backed integration/deployment target; credential rotation/reset and Print Agent credential lifecycle; WebSocket security; operating systems/printers; retry and ambiguous outcome handling; browser/accessibility support and E2E runner. Resolved administrator authentication policy: 30-minute JWT access tokens with no refresh token, and a one-time environment-credential bootstrap only when no ADMIN account exists. Resolved pricing/order rules: cryptographically random, globally unique 12-character uppercase order tokens from an ambiguity-reduced alphabet; final-total rounding to two decimal places using `HALF_UP`; customer orders include all uploaded pages (page-range controls remain admin-only); snapshot the server-derived rate and total at order creation. Upload policy is selected: PDF, DOCX, JPG, and PNG, maximum 25 MB; PDF pages use PDFBox, raster images count as one page, and DOCX pages use LibreOffice conversion. DOCX processing must fail closed when conversion is unavailable.

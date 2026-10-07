@@ -111,8 +111,34 @@ public class PrintOrderEntity extends BaseEntity {
         this.doubleSided = doubleSided;
     }
 
-    public void updateStatus(PrintOrderStatus status, Instant printedAt) {
-        this.status = status;
-        this.printedAt = printedAt;
+    public void transitionTo(PrintOrderStatus nextStatus, Instant transitionedAt) {
+        if (nextStatus == null || !canTransitionTo(nextStatus)) {
+            throw new InvalidOrderTransitionException(status, nextStatus);
+        }
+        if (nextStatus == PrintOrderStatus.PRINTED && transitionedAt == null) {
+            throw new InvalidOrderTransitionException(status, nextStatus);
+        }
+
+        this.status = nextStatus;
+        if (nextStatus == PrintOrderStatus.PRINTED) {
+            this.printedAt = transitionedAt;
+        }
+    }
+
+    private boolean canTransitionTo(PrintOrderStatus nextStatus) {
+        return switch (status) {
+            case PENDING -> nextStatus == PrintOrderStatus.PRINT_REQUESTED
+                    || nextStatus == PrintOrderStatus.CANCELLED;
+            case PRINT_REQUESTED -> nextStatus == PrintOrderStatus.QUEUED
+                    || nextStatus == PrintOrderStatus.FAILED
+                    || nextStatus == PrintOrderStatus.CANCELLED;
+            case QUEUED -> nextStatus == PrintOrderStatus.PRINTING
+                    || nextStatus == PrintOrderStatus.FAILED
+                    || nextStatus == PrintOrderStatus.CANCELLED;
+            case PRINTING -> nextStatus == PrintOrderStatus.PRINTED
+                    || nextStatus == PrintOrderStatus.FAILED;
+            case FAILED -> nextStatus == PrintOrderStatus.PRINT_REQUESTED;
+            case PRINTED, CANCELLED -> false;
+        };
     }
 }

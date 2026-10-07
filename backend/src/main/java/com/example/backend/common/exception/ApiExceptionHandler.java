@@ -6,10 +6,18 @@ import java.util.TreeMap;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import com.example.backend.entity.InvalidOrderTransitionException;
 import com.example.backend.service.document.DocumentProcessingUnavailableException;
+import com.example.backend.service.document.DocumentNotFoundException;
 import com.example.backend.service.document.DocumentStorageException;
 import com.example.backend.service.document.DocumentTooLargeException;
 import com.example.backend.service.document.InvalidDocumentException;
+import com.example.backend.service.admin.InvalidAdminCredentialsException;
+import com.example.backend.service.order.InvalidPrintOrderRequestException;
+import com.example.backend.service.order.OrderTokenGenerationException;
+import com.example.backend.service.order.PrintOrderNotFoundException;
+import com.example.backend.service.pricing.InvalidPricingRequestException;
+import com.example.backend.service.pricing.PricingUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
@@ -133,6 +141,118 @@ public class ApiExceptionHandler {
                 "DOCUMENT_STORAGE_FAILURE",
                 request);
         return ResponseEntity.internalServerError().body(problem);
+    }
+
+    @ExceptionHandler(DocumentNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleDocumentNotFound(
+            DocumentNotFoundException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.NOT_FOUND,
+                "Document not found",
+                exception.getMessage(),
+                "urn:printdesk:problem:document-not-found",
+                "DOCUMENT_NOT_FOUND",
+                request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InvalidPricingRequestException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPricingRequest(
+            InvalidPricingRequestException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid pricing request",
+                exception.getMessage(),
+                "urn:printdesk:problem:invalid-pricing-request",
+                "INVALID_PRICING_REQUEST",
+                request);
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(PricingUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handlePricingUnavailable(
+            PricingUnavailableException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Pricing unavailable",
+                exception.getMessage(),
+                "urn:printdesk:problem:pricing-unavailable",
+                "PRICING_UNAVAILABLE",
+                request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problem);
+    }
+
+    @ExceptionHandler(InvalidPrintOrderRequestException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPrintOrderRequest(
+            InvalidPrintOrderRequestException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid print order",
+                exception.getMessage(),
+                "urn:printdesk:problem:invalid-print-order",
+                "INVALID_PRINT_ORDER",
+                request);
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(PrintOrderNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handlePrintOrderNotFound(
+            PrintOrderNotFoundException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.NOT_FOUND,
+                "Print order not found",
+                exception.getMessage(),
+                "urn:printdesk:problem:print-order-not-found",
+                "PRINT_ORDER_NOT_FOUND",
+                request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InvalidOrderTransitionException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidOrderTransition(
+            InvalidOrderTransitionException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.CONFLICT,
+                "Invalid print order transition",
+                exception.getMessage(),
+                "urn:printdesk:problem:invalid-order-transition",
+                "INVALID_ORDER_TRANSITION",
+                request);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(OrderTokenGenerationException.class)
+    public ResponseEntity<ProblemDetail> handleOrderTokenGenerationFailure(
+            OrderTokenGenerationException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Order token unavailable",
+                "A unique order token could not be generated. Please retry later.",
+                "urn:printdesk:problem:order-token-unavailable",
+                "ORDER_TOKEN_UNAVAILABLE",
+                request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problem);
+    }
+
+    @ExceptionHandler(InvalidAdminCredentialsException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidAdminCredentials(
+            InvalidAdminCredentialsException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.UNAUTHORIZED,
+                "Invalid credentials",
+                "The username or password is invalid.",
+                "urn:printdesk:problem:invalid-admin-credentials",
+                "INVALID_ADMIN_CREDENTIALS",
+                request);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
     }
 
     private ProblemDetail createProblem(

@@ -14,6 +14,8 @@ public interface PrintJobRepository extends JpaRepository<PrintJobEntity, UUID> 
 
     List<PrintJobEntity> findAllByPrintOrder_IdOrderByAttemptNumberDesc(UUID printOrderId);
 
+    boolean existsByPrintOrder_Document_IdAndAgent_AgentCode(UUID documentId, String agentCode);
+
     Optional<PrintJobEntity> findFirstByPrinter_IdAndStatusOrderByQueuedAtAsc(
             UUID printerId,
             PrintJobStatus status);

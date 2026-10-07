@@ -5,10 +5,10 @@ metadata:
 
 summary:
   total_tasks: 54
-  completed_tasks: 9
+  completed_tasks: 19
   in_progress_tasks: 0
-  pending_tasks: 45
-  completion_percentage: 16.7
+  pending_tasks: 35
+  completion_percentage: 35.2
 
 tasks:
   - task_id: "T001"
@@ -222,7 +222,7 @@ tasks:
         failed: 0
         skipped: 0
         failures: []
-      notes: "File type, size, and retention policy are enforced in later upload/storage tasks."
+      notes: "The 25 MB bound is enforced by T009; content validation and page counting are implemented by T010. Retention remains open."
     upstream_trace:
       plan_item: "1.3"
       requirements: ["REQ-001", "REQ-002"]
@@ -277,48 +277,499 @@ tasks:
       plan_item: "1.3"
       requirements: ["REQ-001", "REQ-002"]
       full_trace: "REQ-001,REQ-002 -> Phase-1.3 -> T009 -> private local storage adapter and storage tests"
-
-pending_tasks:
   - task_id: "T010"
     description: "Implement upload validation, metadata, and page counting"
-    blocked_by: ["T008", "T009", "Page-count behavior decision"]
-    priority: "P1"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/pom.xml"
+          changes:
+            - change_type: "modified"
+              description: "Added Apache PDFBox for PDF parsing and page counting."
+        - file: "backend/src/main/resources/application.properties"
+          changes:
+            - change_type: "modified"
+              description: "Added externalizable LibreOffice command and bounds for DOCX conversion, image pixels, expanded archive size, and entry count."
+        - file: "backend/src/main/java/com/example/backend/service/DocumentUploadService.java"
+          changes:
+            - change_type: "added"
+              description: "Validates upload size/name, stores through the adapter, inspects contents, persists document metadata, and cleans up bytes on rejected or failed persistence."
+        - file: "backend/src/main/java/com/example/backend/service/document/DocumentContentInspector.java"
+          changes:
+            - change_type: "added"
+              description: "Validates PDF/JPG/PNG signatures and image contents, structurally validates DOCX archives with expansion bounds, and returns detected media type and page count."
+        - file: "backend/src/main/java/com/example/backend/service/document/PdfPageCounter.java"
+          changes:
+            - change_type: "added"
+              description: "Parses PDFs and rejects corrupt, encrypted/unreadable, or zero-page documents."
+        - file: "backend/src/main/java/com/example/backend/service/document/LibreOfficeDocxPageCounter.java"
+          changes:
+            - change_type: "added"
+              description: "Runs headless LibreOffice with a private profile and timeout, converts DOCX to PDF, and counts rendered pages."
+        - file: "backend/src/main/java/com/example/backend/service/document/DocumentProcessingProperties.java"
+          changes:
+            - change_type: "added"
+              description: "Added validated processing limits and converter configuration."
+        - file: "backend/src/main/java/com/example/backend/service/document/DocumentInspection.java"
+          changes:
+            - change_type: "added"
+              description: "Represented validated media type and page count."
+        - file: "backend/src/main/java/com/example/backend/service/document/DocxPageCounter.java"
+          changes:
+            - change_type: "added"
+              description: "Defined the injectable DOCX rendered-page counting contract."
+        - file: "backend/src/main/java/com/example/backend/service/document/InvalidDocumentException.java"
+          changes:
+            - change_type: "added"
+              description: "Represented rejected or unreadable document input."
+        - file: "backend/src/main/java/com/example/backend/service/document/DocumentProcessingUnavailableException.java"
+          changes:
+            - change_type: "added"
+              description: "Represented unavailable or interrupted document-processing infrastructure."
+        - file: "backend/src/main/java/com/example/backend/service/document/DocumentTooLargeException.java"
+          changes:
+            - change_type: "added"
+              description: "Represented upload size-limit rejection."
+        - file: "backend/src/main/java/com/example/backend/service/document/DocumentStorageException.java"
+          changes:
+            - change_type: "added"
+              description: "Represented a private storage failure without exposing local paths."
+        - file: "backend/src/main/java/com/example/backend/common/exception/ApiExceptionHandler.java"
+          changes:
+            - change_type: "modified"
+              description: "Added consistent ProblemDetail mappings for invalid, oversized, unavailable, and failed document processing."
+        - file: "backend/src/test/java/com/example/backend/service/document/DocumentContentInspectorTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests supported types, PDF pages, image single-page rules, image-pixel limits, corrupt PDF, invalid DOCX, and unsupported content."
+        - file: "backend/src/test/java/com/example/backend/service/document/LibreOfficeDocxPageCounterTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests real DOCX-to-PDF page counting when LibreOffice is available and explicit failure when it cannot start."
+        - file: "backend/src/test/java/com/example/backend/service/DocumentUploadServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests sanitized metadata persistence, rejection cleanup, empty uploads, and size-limit rejection."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Verifies an uploaded PDF is persisted with detected type, page count, size, and digest through the H2/Flyway context."
+        - file: "backend/README.md"
+          changes:
+            - change_type: "modified"
+              description: "Documented LibreOffice setup, conversion behavior, resource limits, and production isolation requirements."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 27
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "The suite includes real LibreOffice conversion using the local soffice binary and H2/Flyway persistence verification. MySQL 8.4 was not used."
+    upstream_trace:
+      plan_item: "1.3"
+      requirements: ["REQ-001", "REQ-002", "REQ-015", "REQ-016"]
+      full_trace: "REQ-001,REQ-002,REQ-015,REQ-016 -> Phase-1.3 -> T010 -> validated upload service, safe metadata persistence, and format-aware page counts"
   - task_id: "T011"
     description: "Add upload and authorized document download endpoints"
-    blocked_by: ["T010", "Authentication policy"]
-    priority: "P1"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/controller/DocumentController.java"
+          changes:
+            - change_type: "added"
+              description: "Added public multipart upload and streamed document download routes."
+        - file: "backend/src/main/java/com/example/backend/service/DocumentDownloadService.java"
+          changes:
+            - change_type: "added"
+              description: "Allows administrators and only agents assigned to a job for the document; hides document existence from unrelated agents."
+        - file: "backend/src/main/java/com/example/backend/repository/PrintJobRepository.java"
+          changes:
+            - change_type: "modified"
+              description: "Added document-to-agent job-assignment existence query."
+        - file: "backend/src/main/java/com/example/backend/config/SecurityConfiguration.java"
+          changes:
+            - change_type: "added"
+              description: "Configured stateless authorization, public upload, protected download, health access, and disabled HTTP Basic/form login."
+        - file: "backend/src/main/resources/application.properties"
+          changes:
+            - change_type: "modified"
+              description: "Disabled Boot's generated development user; retained external authentication as a later task."
+        - file: "backend/pom.xml"
+          changes:
+            - change_type: "modified"
+              description: "Added Spring Boot Jackson support for JSON API contracts."
+        - file: "backend/src/main/java/com/example/backend/common/exception/ApiExceptionHandler.java"
+          changes:
+            - change_type: "modified"
+              description: "Added a non-disclosing document-not-found ProblemDetail response."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 32
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "MockMvc exercised public upload, anonymous 401, customer 403, unassigned agent 404, and administrator stream 200. Credential providers are not yet implemented."
+    upstream_trace:
+      plan_item: "1.3"
+      requirements: ["REQ-001", "REQ-002", "REQ-015", "REQ-016"]
+      full_trace: "REQ-001,REQ-002,REQ-015,REQ-016 -> Phase-1.3 -> T011 -> upload and authorized document retrieval API"
   - task_id: "T012"
     description: "Test upload validation and protected file access"
-    blocked_by: ["T010", "T011"]
-    priority: "P1"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/test/java/com/example/backend/service/DocumentDownloadServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests administrator access, assigned-agent access, unrelated-agent concealment, and rejection of other roles."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Tests the public upload route, persisted metadata, streaming, and anonymous/customer/agent/admin access boundaries. Reuses upload-format and storage-isolation evidence from T009/T010."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 32
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Coverage includes controller runtime responses and service/storage-level validation; a real MySQL backend was not used."
+    upstream_trace:
+      plan_item: "1.3"
+      requirements: ["REQ-001", "REQ-002", "REQ-015", "REQ-016"]
+      full_trace: "REQ-001,REQ-002,REQ-015,REQ-016 -> Phase-1.3 -> T012 -> document validation, page counting, storage isolation, and access-control tests"
+
   - task_id: "T013"
     description: "Implement rate lookup and server-side price calculation"
-    blocked_by: ["Rate rounding decision", "T005"]
-    priority: "P1"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/service/PricingService.java"
+          changes:
+            - change_type: "added"
+              description: "Calculates server-owned quotes from active persisted rates, validates page/copy counts, guards multiplication overflow, and rounds the final INR total using HALF_UP."
+        - file: "backend/src/main/java/com/example/backend/service/pricing/PriceQuote.java"
+          changes:
+            - change_type: "added"
+              description: "Returns page/copy totals, persisted per-page rate, total amount, and currency as server-derived quote data for order-time price snapshotting."
+        - file: "backend/src/main/java/com/example/backend/service/pricing/InvalidPricingRequestException.java"
+          changes:
+            - change_type: "added"
+              description: "Represents invalid price request inputs and page-count overflow."
+        - file: "backend/src/main/java/com/example/backend/service/pricing/PricingUnavailableException.java"
+          changes:
+            - change_type: "added"
+              description: "Represents missing active rates or invalid/unsupported persisted pricing configuration."
+        - file: "backend/src/main/java/com/example/backend/common/exception/ApiExceptionHandler.java"
+          changes:
+            - change_type: "modified"
+              description: "Maps pricing input/configuration failures to explicit API problem responses."
+        - file: "backend/src/test/java/com/example/backend/service/PricingServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Covers persisted-rate calculation, final-total HALF_UP rounding, invalid counts, integer overflow, unavailable rates, and unsupported currency."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 38
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Full backend suite passed. The pricing rule rounds only the final total to two decimals using HALF_UP. Tests use mocks for the rate repository; real MySQL 8.4 integration remains outstanding."
+    upstream_trace:
+      plan_item: "1.4"
+      requirements: ["REQ-003", "REQ-004", "REQ-005", "REQ-015"]
+      full_trace: "REQ-003,REQ-004,REQ-005,REQ-015 -> Phase-1.4 -> T013 -> server-derived quote validation, persisted-rate lookup, and total calculation"
+
   - task_id: "T014"
     description: "Implement tokens, orders, transitions, and status lookup"
-    blocked_by: ["T005", "Token policy decision"]
-    priority: "P1"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/dto/order/CreatePrintOrderRequest.java"
+          changes:
+            - change_type: "added"
+              description: "Defines validated document, print type, copy count, supported paper size/orientation, and duplex inputs; customer page ranges are intentionally excluded."
+        - file: "backend/src/main/java/com/example/backend/dto/order/CreatePrintOrderResponse.java"
+          changes:
+            - change_type: "added"
+              description: "Returns the generated token and server-calculated order receipt details."
+        - file: "backend/src/main/java/com/example/backend/dto/order/PrintOrderStatusResponse.java"
+          changes:
+            - change_type: "added"
+              description: "Exposes limited order status and pricing details for public token lookup."
+        - file: "backend/src/main/java/com/example/backend/service/order/OrderTokenGenerator.java"
+          changes:
+            - change_type: "added"
+              description: "Generates cryptographically random 12-character globally unique token candidates from an ambiguity-reduced alphabet."
+        - file: "backend/src/main/java/com/example/backend/service/PrintOrderService.java"
+          changes:
+            - change_type: "added"
+              description: "Creates all-page orders using persisted document page counts and server-derived immutable rate/amount snapshots; retries existing-token collisions; provides token status lookup and guarded transition delegation."
+        - file: "backend/src/main/java/com/example/backend/entity/PrintOrderEntity.java"
+          changes:
+            - change_type: "modified"
+              description: "Centralizes allowed status transitions and sets printed_at only when a job reaches PRINTED."
+        - file: "backend/src/main/java/com/example/backend/entity/InvalidOrderTransitionException.java"
+          changes:
+            - change_type: "added"
+              description: "Represents invalid order lifecycle transitions as a domain error."
+        - file: "backend/src/main/java/com/example/backend/common/exception/ApiExceptionHandler.java"
+          changes:
+            - change_type: "modified"
+              description: "Maps invalid orders, unknown orders, invalid transitions, and token-generation exhaustion to explicit problem responses."
+        - file: "backend/src/test/java/com/example/backend/service/PrintOrderServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests order creation, rate-derived fields, token collision retries, invalid documents/preferences, amount bounds, and public status lookup."
+        - file: "backend/src/test/java/com/example/backend/entity/PrintOrderEntityTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests valid and invalid lifecycle transitions and printed timestamp behavior."
+        - file: "backend/src/test/java/com/example/backend/common/exception/ApiExceptionHandlerTest.java"
+          changes:
+            - change_type: "modified"
+              description: "Tests explicit error contracts for invalid orders, unknown tokens/orders, invalid transitions, and token-generation failure."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Verifies real H2/Flyway persistence, token format, total calculation, rate snapshot immutability, and status progression."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 56
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "H2 MySQL-mode integration passed. It is not proof of actual MySQL 8.4 compatibility. No HTTP order endpoints were added in T014; those are T015."
+    upstream_trace:
+      plan_item: "1.4"
+      requirements: ["REQ-003", "REQ-004", "REQ-005", "REQ-006", "REQ-015"]
+      full_trace: "REQ-003,REQ-004,REQ-005,REQ-006,REQ-015 -> Phase-1.4 -> T014 -> persisted orders, secure bearer tokens, immutable pricing snapshots, and guarded status transitions"
+
   - task_id: "T015"
     description: "Add customer pricing, order, and status endpoints"
-    blocked_by: ["T013", "T014"]
-    priority: "P1"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/controller/PrintOrderController.java"
+          changes:
+            - change_type: "added"
+              description: "Wires public estimate, order creation, and token status routes with request validation and created response location."
+        - file: "backend/src/main/java/com/example/backend/dto/order/PriceEstimateRequest.java"
+          changes:
+            - change_type: "added"
+              description: "Validates document ID, print type, and positive copy count for price estimates."
+        - file: "backend/src/main/java/com/example/backend/dto/order/PriceEstimateResponse.java"
+          changes:
+            - change_type: "added"
+              description: "Returns total pages, active per-page rate, total amount, and currency calculated by the backend."
+        - file: "backend/src/main/java/com/example/backend/service/PrintOrderService.java"
+          changes:
+            - change_type: "modified"
+              description: "Adds a server-derived estimate operation sharing persisted document page counts and order amount limits."
+        - file: "backend/src/main/java/com/example/backend/config/SecurityConfiguration.java"
+          changes:
+            - change_type: "modified"
+              description: "Permits public estimate/order submissions and public token status lookup while preserving protected document downloads."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Exercises estimate/order/status routes anonymously, including invalid request and malformed-token responses."
+        - file: "backend/README.md"
+          changes:
+            - change_type: "modified"
+              description: "Documents customer order API payloads, all-page behavior, token handling, and outstanding public status rate limiting."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 57
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "MockMvc runtime checks passed for public estimate 200, order creation 201, token status 200, invalid input 400, and malformed token 404."
+    upstream_trace:
+      plan_item: "1.4"
+      requirements: ["REQ-003", "REQ-004", "REQ-005", "REQ-006", "REQ-015"]
+      full_trace: "REQ-003,REQ-004,REQ-005,REQ-006,REQ-015 -> Phase-1.4 -> T015 -> public customer estimate, order submission, and bearer-token status API"
+
   - task_id: "T016"
-    description: "Test pricing, uniqueness, order validation, and transitions"
-    blocked_by: ["T013", "T014"]
-    priority: "P1"
+    description: "Test pricing, token uniqueness, order validation, tampering, and transitions"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/test/java/com/example/backend/service/PricingServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests active-rate arithmetic, HALF_UP final-total rounding, invalid counts, overflow, unavailable rate, and unsupported currency."
+        - file: "backend/src/test/java/com/example/backend/service/PrintOrderServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests generated-token uniqueness retries, server-derived rate/total, document and preference validation, and public token lookup."
+        - file: "backend/src/test/java/com/example/backend/entity/PrintOrderEntityTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests valid/invalid lifecycle transitions, terminal states, retry path, and printed_at semantics."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Verifies request validation and submits forged pricePerPage/totalAmount values; order creation succeeds using the persisted active server rate instead."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 57
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Full suite passed, including public MockMvc routes and H2-backed persistence. No client-supplied total is used for order creation."
+    upstream_trace:
+      plan_item: "1.4"
+      requirements: ["REQ-003", "REQ-004", "REQ-005", "REQ-006", "REQ-015"]
+      full_trace: "REQ-003,REQ-004,REQ-005,REQ-006,REQ-015 -> Phase-1.4 -> T016 -> verified pricing, token collision handling, request validation, price tampering defense, and status transitions"
+
   - task_id: "T017"
-    description: "Implement admin credential verification and token issuance"
-    blocked_by: ["Admin credential policy decision"]
-    priority: "P1"
+    description: "Implement administrator credential verification, JWT issuance, and initial provisioning"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/pom.xml"
+          changes:
+            - change_type: "modified"
+              description: "Added Spring Security OAuth2 JOSE and resource-server dependencies for signed JWT creation and decoding."
+        - file: "backend/src/main/java/com/example/backend/service/AdminAuthenticationService.java"
+          changes:
+            - change_type: "added"
+              description: "Normalizes usernames, verifies BCrypt credentials, equalizes failed-login hash work, and returns generic authentication errors."
+        - file: "backend/src/main/java/com/example/backend/service/admin/AdminBootstrapRunner.java"
+          changes:
+            - change_type: "added"
+              description: "Creates a BCrypt-hashed initial ADMIN only when no ADMIN account exists and valid bootstrap credentials are configured."
+        - file: "backend/src/main/java/com/example/backend/config/JwtConfiguration.java"
+          changes:
+            - change_type: "added"
+              description: "Validates a base64 HMAC key of at least 256 bits and configures HS256 encoding plus signature and issuer validation."
+        - file: "backend/src/main/java/com/example/backend/service/admin/JwtTokenService.java"
+          changes:
+            - change_type: "added"
+              description: "Issues signed JWT bearer tokens containing identity and role claims with a 30-minute lifetime."
+        - file: "backend/src/main/java/com/example/backend/controller/AdminAuthenticationController.java"
+          changes:
+            - change_type: "added"
+              description: "Exposes POST /api/admin/login with validated request and token response DTOs."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Verifies bootstrap, credential login, JWT role/issuer/expiry claims, and subsequent bearer-token authentication."
+        - file: "backend/src/test/java/com/example/backend/service/AdminAuthenticationServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests successful login and generic failures for invalid credentials."
+        - file: "backend/src/test/java/com/example/backend/service/admin/AdminBootstrapRunnerTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests bootstrap creation, existing-admin idempotence, and invalid/missing bootstrap configuration."
+        - file: "backend/src/test/java/com/example/backend/config/JwtConfigurationTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests valid and rejected JWT HMAC key configuration."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 68
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "JWT login, signature decoding, role claims, issuer, and 30-minute expiry passed in MockMvc-backed integration tests; credentials are never returned or logged."
+    upstream_trace:
+      plan_item: "1.5"
+      requirements: ["REQ-007", "REQ-015"]
+      full_trace: "REQ-007,REQ-015 -> Phase-1.5 -> T017 -> one-time admin bootstrap and signed JWT login API"
+
   - task_id: "T018"
-    description: "Configure route authorization and security errors"
-    blocked_by: ["T017"]
-    priority: "P1"
+    description: "Configure JWT route authorization and security error responses"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/config/SecurityConfiguration.java"
+          changes:
+            - change_type: "modified"
+              description: "Added stateless JWT decoding, explicit role-based admin/operator/agent route checks, and public customer-route exceptions."
+        - file: "backend/src/main/java/com/example/backend/config/SecurityProblemWriter.java"
+          changes:
+            - change_type: "added"
+              description: "Writes non-sensitive RFC 9457 Problem Details responses for authentication and authorization failures."
+        - file: "backend/src/main/resources/application.properties"
+          changes:
+            - change_type: "modified"
+              description: "Externalized the JWT issuer and retained the required environment-provided HMAC signing key."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Verifies anonymous admin access is denied, a valid signed admin token is accepted, and an unrelated role receives 403."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 68
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Customer endpoints remain public as specified; admin routes require ADMIN/OPERATOR and document downloads require ADMIN or AGENT before assigned-job checks."
+    upstream_trace:
+      plan_item: "1.5"
+      requirements: ["REQ-007", "REQ-015"]
+      full_trace: "REQ-007,REQ-015 -> Phase-1.5 -> T018 -> stateless JWT route checks and safe security errors"
+
   - task_id: "T019"
-    description: "Test authentication and role boundaries"
-    blocked_by: ["T017", "T018"]
-    priority: "P1"
+    description: "Test authentication and route role boundaries"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Covers valid and invalid login, JWT claims and expiration, role-gated routes, and non-sensitive 401/403 responses."
+        - file: "backend/src/test/java/com/example/backend/common/exception/ApiExceptionHandlerTest.java"
+          changes:
+            - change_type: "modified"
+              description: "Tests the generic invalid-credentials Problem Details response."
+        - file: "backend/src/test/java/com/example/backend/config/JwtConfigurationTest.java"
+          changes:
+            - change_type: "added"
+              description: "Covers missing, malformed, weak, and valid signing keys."
+        - file: "backend/src/test/java/com/example/backend/service/AdminAuthenticationServiceTest.java"
+          changes:
+            - change_type: "added"
+              description: "Covers credential success and generic failure behavior."
+        - file: "backend/src/test/java/com/example/backend/service/admin/AdminBootstrapRunnerTest.java"
+          changes:
+            - change_type: "added"
+              description: "Covers one-time initial account creation and bootstrap configuration failures."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 68
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Full backend suite passed after T017–T019."
+    upstream_trace:
+      plan_item: "1.5"
+      requirements: ["REQ-007", "REQ-015"]
+      full_trace: "REQ-007,REQ-015 -> Phase-1.5 -> T019 -> verified authentication and route role boundaries"
+
+pending_tasks:
   - task_id: "T020"
     description: "Implement admin order query and dashboard APIs"
     blocked_by: ["T014", "T018"]
@@ -500,11 +951,25 @@ traceability_chain:
       - "backend/src/main/java/com/example/backend/dto/document/DocumentUploadResponse.java"
       - "backend/src/test/java/com/example/backend/dto/document/UploadDocumentRequestTest.java"
     status: "partial"
+  - chain_id: "TRACE-REQ-007-REQ-015-T017-T019"
+    requirement: "REQ-007, REQ-015"
+    plan_phase: "Phase-1"
+    plan_item: "1.5"
+    tasks: ["T017", "T018", "T019"]
+    files:
+      - "backend/src/main/java/com/example/backend/service/AdminAuthenticationService.java"
+      - "backend/src/main/java/com/example/backend/service/admin/AdminBootstrapRunner.java"
+      - "backend/src/main/java/com/example/backend/service/admin/JwtTokenService.java"
+      - "backend/src/main/java/com/example/backend/config/JwtConfiguration.java"
+      - "backend/src/main/java/com/example/backend/config/SecurityConfiguration.java"
+      - "backend/src/main/java/com/example/backend/controller/AdminAuthenticationController.java"
+      - "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+    status: "partial"
 
 validation:
   passed: true
   errors: []
   warnings:
     - "The migration has only been verified under H2 MySQL mode; test against a real MySQL 8.4 instance."
-    - "Maximum upload size and document retention/deletion policy remain undecided."
+    - "Document retention/deletion and malware-scanning policy remain undecided."
   blocking_issues: []

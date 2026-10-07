@@ -85,7 +85,7 @@ Order is intentional: complete backend data and contract foundations first; then
 
 #### 1.4 Pricing and print-order domain
 - **Requirements:** REQ-003, REQ-004, REQ-005, REQ-006, REQ-015
-- **Description:** Implement print preference validation, rate lookup, decimal-safe server-side estimate/final calculation, a rate snapshot per order, total-page calculation, unique token generation, order creation, and token-based status lookup. Validate copy count/page range and prevent stale or client-tampered prices.
+- **Description:** Implement print preference validation, rate lookup, decimal-safe server-side estimate/final calculation, an immutable rate snapshot per order, total-page calculation, unique token generation, order creation, and token-based status lookup. Customer orders print all uploaded pages; page-range controls remain admin-only. Validate copy count and prevent stale or client-tampered prices.
 
 #### 1.5 Admin identity and authorization
 - **Requirements:** REQ-007, REQ-015
@@ -164,16 +164,16 @@ Tasks are ordered by dependency and module. `[P]` marks work that may proceed in
 - [x] T007 [Plan:1.2] Add migration scripts for the initial schema under `backend/src/main/resources/db/migration/`.
 - [x] T008 [Plan:1.3] Define upload/request/response DTOs and validation rules under `backend/src/main/java/com/example/backend/dto/`.
 - [x] T009 [Plan:1.3] Implement secure local file storage adapter and storage-key handling under `backend/src/main/java/com/example/backend/storage/`.
-- [ ] T010 [Plan:1.3] Implement upload validation, file persistence, metadata extraction, and supported-format page counting under `backend/src/main/java/com/example/backend/service/`.
-- [ ] T011 [Plan:1.3] Add upload and authorized document-download endpoints under `backend/src/main/java/com/example/backend/controller/`.
-- [ ] T012 [P] [Plan:1.3] Add focused upload-validation, page-count, storage-path isolation, and unauthorized-download tests under `backend/src/test/java/com/example/backend/`.
-- [ ] T013 [Plan:1.4] Implement decimal-safe rate lookup, total-page calculation, and server-owned estimate/order price snapshot in `backend/src/main/java/com/example/backend/service/`.
-- [ ] T014 [Plan:1.4] Implement token generation, order creation, valid state transitions, and public token status lookup in `backend/src/main/java/com/example/backend/service/`.
-- [ ] T015 [Plan:1.4] Add customer pricing, order submission, and token status endpoints under `backend/src/main/java/com/example/backend/controller/`.
-- [ ] T016 [P] [Plan:1.4] Add pricing, token uniqueness, amount tampering, order validation, and status transition tests under `backend/src/test/java/com/example/backend/`.
-- [ ] T017 [Plan:1.5] Implement administrator credential verification, secure token issuance, and initial admin provisioning configuration under `backend/src/main/java/com/example/backend/security/`.
-- [ ] T018 [Plan:1.5] Configure route authorization and security error handling under `backend/src/main/java/com/example/backend/security/` and `backend/src/main/java/com/example/backend/config/`.
-- [ ] T019 [Plan:1.5] Add authentication and role-boundary tests under `backend/src/test/java/com/example/backend/`.
+- [x] T010 [Plan:1.3] Implement upload validation, file persistence, metadata extraction, and supported-format page counting under `backend/src/main/java/com/example/backend/service/`.
+- [x] T011 [Plan:1.3] Add upload and authorized document-download endpoints under `backend/src/main/java/com/example/backend/controller/`.
+- [x] T012 [P] [Plan:1.3] Add focused upload-validation, page-count, storage-path isolation, and unauthorized-download tests under `backend/src/test/java/com/example/backend/`.
+- [x] T013 [Plan:1.4] Implement decimal-safe rate lookup, total-page calculation, and server-owned estimate/order price snapshot in `backend/src/main/java/com/example/backend/service/`.
+- [x] T014 [Plan:1.4] Implement secure token generation, order creation with an immutable rate snapshot, valid state transitions, and public token status lookup in `backend/src/main/java/com/example/backend/service/`.
+- [x] T015 [Plan:1.4] Add customer pricing, order submission, and token status endpoints under `backend/src/main/java/com/example/backend/controller/`.
+- [x] T016 [P] [Plan:1.4] Add pricing, token uniqueness, amount tampering, order validation, and status transition tests under `backend/src/test/java/com/example/backend/`.
+- [x] T017 [Plan:1.5] Implement BCrypt administrator credential verification, HS256 JWT issuance/validation configuration, 30-minute access tokens, and one-time environment-based initial admin provisioning under `backend/src/main/java/com/example/backend/`.
+- [x] T018 [Plan:1.5] Configure stateless JWT resource-server validation, admin/operator/agent route role checks, and non-sensitive Problem Details security failures under `backend/src/main/java/com/example/backend/config/`.
+- [x] T019 [Plan:1.5] Add bootstrap, login, JWT claims/expiry, authenticated route, and role-boundary tests under `backend/src/test/java/com/example/backend/`.
 - [ ] T020 [Plan:1.6] Implement admin order search/filter/detail/history/statistics endpoints under `backend/src/main/java/com/example/backend/controller/` and `backend/src/main/java/com/example/backend/service/`.
 - [ ] T021 [Plan:1.6] Implement printer configuration/default and pricing read/write endpoints under `backend/src/main/java/com/example/backend/controller/` and `backend/src/main/java/com/example/backend/service/`.
 - [ ] T022 [Plan:1.6] Implement guarded print, retry, and cancel operations with audit events under `backend/src/main/java/com/example/backend/service/`.
@@ -292,14 +292,15 @@ The SRS gives product-level requirements but does not settle these implementatio
 1. Accepted formats are PDF, DOCX, JPG, and PNG and the maximum size is 25 MB per file. Retention/deletion policy and malware-scanning requirement remain open.
 2. Resolved per user: PDF pages are counted with PDFBox; validated JPG/PNG images count as one page; validated DOCX files are converted to PDF with LibreOffice for rendered page count. DOCX conversion times out after 30 seconds and fails closed if LibreOffice cannot run; malformed/unsupported content is rejected.
 3. Flyway and MySQL 8.4 LTS are selected. Local development provisioning and production deployment target remain open.
-4. Admin bootstrap method, JWT lifetime/refresh/revocation policy, and password reset/rotation approach.
-5. Agent credential issuance/rotation/revocation and whether a deployment has one or multiple agents from day one.
+4. Resolved per user: issue JWT access tokens valid for 30 minutes with no refresh token; bootstrap the first administrator from environment credentials only when no ADMIN account exists. Password reset/rotation remains open.
+5. Resolved per user: download is allowed to admins and authenticated agents assigned to an associated print job; unrelated agents receive not-found. Agent credential issuance/rotation/revocation and whether a deployment has one or multiple agents from day one remain open.
 6. WebSocket authentication/authorization mechanism and TLS/network exposure constraints.
 7. Supported operating systems, printer drivers, duplex/color capability mapping, and behavior when requested settings are unsupported.
 8. Retry limit/backoff and handling for ambiguous “printer accepted job but agent lost acknowledgement” outcomes.
-9. Token entropy/readability and whether tokens are globally unique or scoped.
-10. Whether prices are rounded per page or only at order total, and how rate changes affect already-submitted orders. Plan recommendation: snapshot the rate used at order creation.
-11. Accessibility/browser support targets and the browser E2E test runner.
+9. Resolved per user: generate a cryptographically random, globally unique 12-character uppercase token from an ambiguity-reduced alphabet; enforce uniqueness in the database and retry pre-existing collisions.
+10. Resolved per user: calculate from the persisted per-page rate and round the final order total to two decimal places using `HALF_UP` (not per-page rounding). Each order snapshots the rate and total at creation, so future rate changes do not alter existing orders.
+11. Resolved per user: customer orders print all uploaded pages; optional page-range controls remain admin-only.
+12. Accessibility/browser support targets and the browser E2E test runner.
 
 ## 10. Requirement mapping
 

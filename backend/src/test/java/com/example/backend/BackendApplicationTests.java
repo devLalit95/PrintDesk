@@ -4,28 +4,68 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import com.example.backend.dto.order.CreatePrintOrderRequest;
+import com.example.backend.dto.order.PriceEstimateRequest;
+import com.example.backend.dto.admin.AdminLoginRequest;
+import com.example.backend.entity.AdminAccountEntity;
+import com.example.backend.entity.AdminRole;
+import com.example.backend.entity.DocumentEntity;
+import com.example.backend.entity.PrintOrderEntity;
+import com.example.backend.entity.PrintOrderStatus;
+import com.example.backend.entity.PrintRateEntity;
+import com.example.backend.entity.PrintType;
 import com.example.backend.repository.DocumentRepository;
+import com.example.backend.repository.AdminAccountRepository;
+import com.example.backend.repository.PrintOrderRepository;
+import com.example.backend.repository.PrintRateRepository;
 import com.example.backend.service.DocumentUploadService;
+import com.example.backend.service.PrintOrderService;
+import com.example.backend.service.admin.JwtTokenService;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
+import tools.jackson.databind.ObjectMapper;
 import org.flywaydb.core.Flyway;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
+@TestPropertySource(properties = {
+		"printdesk.security.jwt.secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		"printdesk.admin.bootstrap.username=test-admin",
+		"printdesk.admin.bootstrap.password=test-only-bootstrap-password"
+})
 @SpringBootTest(properties = {
 		"spring.datasource.url=jdbc:h2:mem:backend-test;MODE=MySQL;DATABASE_TO_LOWER=TRUE",
 		"spring.datasource.username=sa",
 		"spring.datasource.password="
 })
+@AutoConfigureMockMvc
 class BackendApplicationTests {
 
 	private static final Path STORAGE_ROOT = Path.of(
@@ -36,10 +76,37 @@ class BackendApplicationTests {
 	private Flyway flyway;
 
 	@Autowired
+	private AdminAccountRepository adminAccountRepository;
+
+	@Autowired
 	private DocumentRepository documentRepository;
 
 	@Autowired
+	private PrintOrderRepository printOrderRepository;
+
+	@Autowired
+	private PrintRateRepository printRateRepository;
+
+	@Autowired
 	private DocumentUploadService documentUploadService;
+
+	@Autowired
+	private PrintOrderService printOrderService;
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private ObjectMapper objectMapper;
+
+	@Autowired
+	private PasswordEncoder passwordEncoder;
+
+	@Autowired
+	private JwtDecoder jwtDecoder;
+
+	@Autowired
+	private JwtEncoder jwtEncoder;
 
 	@DynamicPropertySource
 	static void configureStorageRoot(DynamicPropertyRegistry registry) {
@@ -59,6 +126,83 @@ class BackendApplicationTests {
 
 	@Test
 	void contextLoads() {
+	}
+
+	@Test
+	void bootstrapsAdminOnceAndIssuesThirtyMinuteJwtAccessTokens() throws Exception {
+		AdminAccountEntity admin = adminAccountRepository.findByUsername("test-admin").orElseThrow();
+		org.junit.jupiter.api.Assertions.assertEquals(AdminRole.ADMIN, admin.getRole());
+		org.junit.jupiter.api.Assertions.assertTrue(
+				passwordEncoder.matches("test-only-bootstrap-password", admin.getPasswordHash()));
+
+		var wrongPassword = mockMvc.perform(MockMvcRequestBuilders.post("/api/admin/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AdminLoginRequest(
+								"test-admin",
+								"wrong-password"))))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized())
+				.andReturn();
+		var unknownUser = mockMvc.perform(MockMvcRequestBuilders.post("/api/admin/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AdminLoginRequest(
+								"unknown-admin",
+								"wrong-password"))))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized())
+				.andReturn();
+		var wrongPasswordBody = objectMapper.readTree(wrongPassword.getResponse().getContentAsByteArray());
+		var unknownUserBody = objectMapper.readTree(unknownUser.getResponse().getContentAsByteArray());
+		org.junit.jupiter.api.Assertions.assertEquals(
+				wrongPasswordBody.get("code").stringValue(),
+				unknownUserBody.get("code").stringValue());
+
+		MvcResult loginResult = mockMvc.perform(MockMvcRequestBuilders.post("/api/admin/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AdminLoginRequest(
+								" TEST-ADMIN ",
+								"test-only-bootstrap-password"))))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andReturn();
+		var loginBody = objectMapper.readTree(loginResult.getResponse().getContentAsByteArray());
+		String accessToken = loginBody.get("accessToken").stringValue();
+		var jwt = jwtDecoder.decode(accessToken);
+
+		org.junit.jupiter.api.Assertions.assertEquals("Bearer", loginBody.get("tokenType").stringValue());
+		org.junit.jupiter.api.Assertions.assertEquals(admin.getId().toString(), jwt.getSubject());
+		org.junit.jupiter.api.Assertions.assertEquals(JwtTokenService.DEFAULT_ISSUER, jwt.getIssuer().toString());
+		org.junit.jupiter.api.Assertions.assertTrue(
+				jwt.getClaimAsStringList("authorities").contains("ROLE_ADMIN"));
+		org.junit.jupiter.api.Assertions.assertEquals(
+				Duration.ofMinutes(30),
+				Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt()));
+		org.junit.jupiter.api.Assertions.assertFalse(loginBody.toString().contains("test-only-bootstrap-password"));
+		Instant now = Instant.now();
+		String wrongIssuerToken = jwtEncoder.encode(JwtEncoderParameters.from(
+				JwsHeader.with(MacAlgorithm.HS256).build(),
+				JwtClaimsSet.builder()
+						.issuer("https://untrusted.example")
+						.subject(admin.getId().toString())
+						.issuedAt(now)
+						.expiresAt(now.plus(Duration.ofMinutes(30)))
+						.claim("authorities", java.util.List.of("ROLE_ADMIN"))
+						.build())).getTokenValue();
+		org.junit.jupiter.api.Assertions.assertThrows(
+				JwtException.class,
+				() -> jwtDecoder.decode(wrongIssuerToken));
+
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/role-check"))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/role-check")
+						.header("Authorization", "Bearer invalid-token"))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/role-check")
+						.header("Authorization", "Bearer " + accessToken))
+				.andExpect(MockMvcResultMatchers.status().isNotFound());
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/role-check")
+						.with(SecurityMockMvcRequestPostProcessors.user("customer-1").roles("CUSTOMER")))
+				.andExpect(MockMvcResultMatchers.status().isForbidden())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value("ACCESS_DENIED"));
 	}
 
 	@Test
@@ -87,5 +231,170 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, persisted.getPageCount());
 		org.junit.jupiter.api.Assertions.assertEquals(pdfBytes.length, persisted.getSizeBytes());
 		org.junit.jupiter.api.Assertions.assertEquals(64, persisted.getSha256Hex().length());
+	}
+
+	@Test
+	void createsOrderWithUniqueSecureTokenAndImmutableRateSnapshot() {
+		PrintRateEntity rate = printRateRepository.findAll().stream()
+				.filter(existing -> existing.getPrintType() == PrintType.COLOR)
+				.findFirst()
+				.orElseGet(() -> new PrintRateEntity(PrintType.COLOR, new java.math.BigDecimal("2.50"), "INR"));
+		rate.updateRate(new java.math.BigDecimal("2.50"), "INR", true);
+		printRateRepository.save(rate);
+
+		DocumentEntity document = documentRepository.save(new DocumentEntity(
+				"order-test.pdf",
+				"test-" + UUID.randomUUID(),
+				"application/pdf",
+				42,
+				2,
+				"b".repeat(64)));
+
+		var created = printOrderService.createOrder(new CreatePrintOrderRequest(
+				document.getId(),
+				PrintType.COLOR,
+				2,
+				"Letter",
+				"Portrait",
+				false));
+
+		org.junit.jupiter.api.Assertions.assertTrue(created.token().matches("[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{12}"));
+		PrintOrderEntity persisted = printOrderRepository.findByToken(created.token()).orElseThrow();
+		org.junit.jupiter.api.Assertions.assertEquals(2, persisted.getPageCount());
+		org.junit.jupiter.api.Assertions.assertEquals(4, persisted.getTotalPages());
+		org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("2.50"), persisted.getPricePerPage());
+		org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("10.00"), persisted.getTotalAmount());
+		org.junit.jupiter.api.Assertions.assertEquals("Letter", persisted.getPaperSize());
+
+		rate.updateRate(new java.math.BigDecimal("9.00"), "INR", true);
+		printRateRepository.save(rate);
+		org.junit.jupiter.api.Assertions.assertEquals(
+				new java.math.BigDecimal("2.50"),
+				printOrderRepository.findByToken(created.token()).orElseThrow().getPricePerPage());
+
+		printOrderService.transitionStatus(persisted.getId(), PrintOrderStatus.PRINT_REQUESTED);
+		printOrderService.transitionStatus(persisted.getId(), PrintOrderStatus.QUEUED);
+		printOrderService.transitionStatus(persisted.getId(), PrintOrderStatus.PRINTING);
+		printOrderService.transitionStatus(persisted.getId(), PrintOrderStatus.PRINTED);
+		var status = printOrderService.getStatusByToken(created.token());
+		org.junit.jupiter.api.Assertions.assertEquals(PrintOrderStatus.PRINTED, status.status());
+		org.junit.jupiter.api.Assertions.assertNotNull(status.printedAt());
+	}
+
+	@Test
+	void exposesPublicEstimateOrderAndTokenStatusEndpoints() throws Exception {
+		PrintRateEntity rate = printRateRepository.findAll().stream()
+				.filter(existing -> existing.getPrintType() == PrintType.COLOR)
+				.findFirst()
+				.orElseGet(() -> new PrintRateEntity(PrintType.COLOR, new java.math.BigDecimal("2.50"), "INR"));
+		rate.updateRate(new java.math.BigDecimal("2.50"), "INR", true);
+		printRateRepository.save(rate);
+
+		DocumentEntity document = documentRepository.save(new DocumentEntity(
+				"api-order.pdf",
+				"api-test-" + UUID.randomUUID(),
+				"application/pdf",
+				42,
+				2,
+				"c".repeat(64)));
+
+		MvcResult estimateResult = mockMvc.perform(MockMvcRequestBuilders.post("/api/print-orders/estimate")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new PriceEstimateRequest(
+								document.getId(),
+								PrintType.COLOR,
+								2))))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andReturn();
+		var estimate = objectMapper.readTree(estimateResult.getResponse().getContentAsByteArray());
+		org.junit.jupiter.api.Assertions.assertEquals(4, estimate.get("totalPages").intValue());
+		org.junit.jupiter.api.Assertions.assertEquals(10.0, estimate.get("totalAmount").doubleValue());
+
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/print-orders/estimate")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new PriceEstimateRequest(
+								document.getId(),
+								PrintType.COLOR,
+								0))))
+				.andExpect(MockMvcResultMatchers.status().isBadRequest());
+
+		var tamperedOrderPayload = objectMapper.createObjectNode()
+				.put("documentId", document.getId().toString())
+				.put("printType", PrintType.COLOR.name())
+				.put("copies", 2)
+				.put("paperSize", "A4")
+				.put("orientation", "portrait")
+				.put("doubleSided", false)
+				.put("pricePerPage", 0.01)
+				.put("totalAmount", 0.01);
+		MvcResult creationResult = mockMvc.perform(MockMvcRequestBuilders.post("/api/print-orders")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(tamperedOrderPayload)))
+				.andExpect(MockMvcResultMatchers.status().isCreated())
+				.andReturn();
+		var creation = objectMapper.readTree(creationResult.getResponse().getContentAsByteArray());
+		String token = creation.get("token").stringValue();
+		org.junit.jupiter.api.Assertions.assertEquals(10.0, creation.get("totalAmount").doubleValue());
+		org.junit.jupiter.api.Assertions.assertEquals(
+				new java.math.BigDecimal("10.00"),
+				printOrderRepository.findByToken(token).orElseThrow().getTotalAmount());
+		org.junit.jupiter.api.Assertions.assertEquals(
+				"/api/print-orders/" + token,
+				creationResult.getResponse().getHeader("Location"));
+
+		MvcResult statusResult = mockMvc.perform(MockMvcRequestBuilders.get("/api/print-orders/{token}", token))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andReturn();
+		var status = objectMapper.readTree(statusResult.getResponse().getContentAsByteArray());
+		org.junit.jupiter.api.Assertions.assertEquals(token, status.get("token").stringValue());
+		org.junit.jupiter.api.Assertions.assertEquals("PENDING", status.get("status").stringValue());
+		org.junit.jupiter.api.Assertions.assertEquals(4, status.get("totalPages").intValue());
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/print-orders/{token}", "NOT-A-VALID-TOKEN"))
+				.andExpect(MockMvcResultMatchers.status().isNotFound());
+	}
+
+	@Test
+	void exposesPublicUploadAndRestrictsDocumentDownloads() throws Exception {
+		mockMvc.perform(MockMvcRequestBuilders.get("/actuator/health"))
+				.andExpect(MockMvcResultMatchers.status().isOk());
+
+		byte[] pdfBytes;
+		try (PDDocument pdf = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+			pdf.addPage(new PDPage());
+			pdf.save(output);
+			pdfBytes = output.toByteArray();
+		}
+		MockMultipartFile file = new MockMultipartFile(
+				"file",
+				"route-test.pdf",
+				"application/pdf",
+				pdfBytes);
+
+		MvcResult upload = mockMvc.perform(MockMvcRequestBuilders.multipart("/api/documents/upload").file(file))
+				.andExpect(MockMvcResultMatchers.status().isCreated())
+				.andReturn();
+		var response = objectMapper.readTree(upload.getResponse().getContentAsByteArray());
+		String documentId = response.get("documentId").stringValue();
+
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/documents/{documentId}", documentId))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized());
+
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/documents/{documentId}", documentId)
+						.with(SecurityMockMvcRequestPostProcessors.user("customer-1").roles("CUSTOMER")))
+				.andExpect(MockMvcResultMatchers.status().isForbidden());
+
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/documents/{documentId}", documentId)
+						.with(SecurityMockMvcRequestPostProcessors.user("assigned-agent").roles("AGENT")))
+				.andExpect(MockMvcResultMatchers.status().isNotFound());
+
+		MvcResult adminDownload = mockMvc.perform(MockMvcRequestBuilders.get(
+								"/api/documents/{documentId}", documentId)
+						.with(SecurityMockMvcRequestPostProcessors.user("admin-1").roles("ADMIN")))
+				.andExpect(MockMvcResultMatchers.request().asyncStarted())
+				.andReturn();
+		mockMvc.perform(MockMvcRequestBuilders.asyncDispatch(adminDownload))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.content().contentType(MediaType.APPLICATION_PDF))
+				.andExpect(MockMvcResultMatchers.content().bytes(pdfBytes));
 	}
 }

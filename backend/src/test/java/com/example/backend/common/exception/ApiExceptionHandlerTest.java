@@ -7,8 +7,14 @@ import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
+import com.example.backend.entity.InvalidOrderTransitionException;
+import com.example.backend.entity.PrintOrderStatus;
+import com.example.backend.service.admin.InvalidAdminCredentialsException;
 import com.example.backend.service.document.DocumentTooLargeException;
 import com.example.backend.service.document.InvalidDocumentException;
+import com.example.backend.service.order.InvalidPrintOrderRequestException;
+import com.example.backend.service.order.OrderTokenGenerationException;
+import com.example.backend.service.order.PrintOrderNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ProblemDetail;
@@ -87,5 +93,67 @@ class ApiExceptionHandlerTest {
         assertEquals(400, response.getStatusCode().value());
         assertEquals("INVALID_DOCUMENT", response.getBody().getProperties().get("code"));
         assertEquals("Only PDF documents are accepted.", response.getBody().getDetail());
+    }
+
+    @Test
+    void invalidPrintOrderReturnsClientError() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/print-orders");
+
+        var response = handler.handleInvalidPrintOrderRequest(
+                new InvalidPrintOrderRequestException("Choose a supported paper size."),
+                request);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals("INVALID_PRINT_ORDER", response.getBody().getProperties().get("code"));
+    }
+
+    @Test
+    void unknownPrintOrderReturnsNonDisclosingNotFound() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/print-orders/UNKNOWN");
+
+        var response = handler.handlePrintOrderNotFound(new PrintOrderNotFoundException(), request);
+
+        assertEquals(404, response.getStatusCode().value());
+        assertEquals("PRINT_ORDER_NOT_FOUND", response.getBody().getProperties().get("code"));
+    }
+
+    @Test
+    void invalidStatusTransitionReturnsConflict() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/print-orders/123");
+
+        var response = handler.handleInvalidOrderTransition(
+                new InvalidOrderTransitionException(PrintOrderStatus.PRINTED, PrintOrderStatus.QUEUED),
+                request);
+
+        assertEquals(409, response.getStatusCode().value());
+        assertEquals("INVALID_ORDER_TRANSITION", response.getBody().getProperties().get("code"));
+    }
+
+    @Test
+    void tokenGenerationFailureReturnsRetryableServiceUnavailable() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/print-orders");
+
+        var response = handler.handleOrderTokenGenerationFailure(new OrderTokenGenerationException(), request);
+
+        assertEquals(503, response.getStatusCode().value());
+        assertEquals("ORDER_TOKEN_UNAVAILABLE", response.getBody().getProperties().get("code"));
+    }
+
+    @Test
+    void invalidAdminCredentialsReturnGenericUnauthorizedProblem() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/admin/login");
+
+        var response = handler.handleInvalidAdminCredentials(
+                new InvalidAdminCredentialsException(),
+                request);
+
+        assertEquals(401, response.getStatusCode().value());
+        assertEquals("INVALID_ADMIN_CREDENTIALS", response.getBody().getProperties().get("code"));
+        assertEquals("The username or password is invalid.", response.getBody().getDetail());
     }
 }

@@ -15,6 +15,7 @@ import com.example.backend.entity.DocumentEntity;
 import com.example.backend.repository.DocumentRepository;
 import com.example.backend.service.document.DocumentContentInspector;
 import com.example.backend.service.document.DocumentInspection;
+import com.example.backend.service.document.DocumentTooLargeException;
 import com.example.backend.service.document.InvalidDocumentException;
 import com.example.backend.storage.DocumentStorageProperties;
 import com.example.backend.storage.LocalDocumentStorage;
@@ -109,5 +110,30 @@ class DocumentUploadServiceTest {
 
         verify(repository, never()).saveAndFlush(any(DocumentEntity.class));
         verify(inspector, never()).inspect(any(Path.class));
+    }
+
+    @Test
+    void rejectsOversizedUploadBeforeWritingToStorage() {
+        DocumentRepository repository = org.mockito.Mockito.mock(DocumentRepository.class);
+        DocumentContentInspector inspector = org.mockito.Mockito.mock(DocumentContentInspector.class);
+        Path storageRoot = temporaryDirectory.resolve("private-storage");
+        LocalDocumentStorage storage = new LocalDocumentStorage(storageRoot);
+        DocumentUploadService service = new DocumentUploadService(
+                storage,
+                repository,
+                inspector,
+                new DocumentStorageProperties(storageRoot, DataSize.ofBytes(3)));
+
+        assertThrows(
+                DocumentTooLargeException.class,
+                () -> service.upload(new MockMultipartFile(
+                        "file",
+                        "document.pdf",
+                        "application/pdf",
+                        new byte[] {1, 2, 3, 4})));
+
+        verify(repository, never()).saveAndFlush(any(DocumentEntity.class));
+        verify(inspector, never()).inspect(any(Path.class));
+        org.junit.jupiter.api.Assertions.assertFalse(Files.exists(storageRoot));
     }
 }

@@ -71,6 +71,18 @@ class DocumentContentInspectorTest {
     }
 
     @Test
+    void rejectsImagesAboveThePixelLimit() throws Exception {
+        Path png = temporaryDirectory.resolve("large.png");
+        ImageIO.write(new BufferedImage(4, 3, BufferedImage.TYPE_INT_ARGB), "png", png.toFile());
+        DocumentProcessingProperties limitedProperties =
+                new DocumentProcessingProperties("soffice", 30, 11, 104_857_600, 10_000);
+        DocumentContentInspector inspector =
+                new DocumentContentInspector(limitedProperties, new PdfPageCounter(), ignored -> 1);
+
+        assertThrows(InvalidDocumentException.class, () -> inspector.inspect(png));
+    }
+
+    @Test
     void validatesDocxPackageBeforeCountingConvertedPages() throws Exception {
         Path docx = temporaryDirectory.resolve("upload.docx");
         createDocx(docx);
