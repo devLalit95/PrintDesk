@@ -15,6 +15,7 @@ import com.example.backend.dto.order.PriceEstimateRequest;
 import com.example.backend.dto.admin.AdminLoginRequest;
 import com.example.backend.entity.AdminAccountEntity;
 import com.example.backend.entity.AdminRole;
+import com.example.backend.entity.AuditLogEntity;
 import com.example.backend.entity.DocumentEntity;
 import com.example.backend.entity.PrintOrderEntity;
 import com.example.backend.entity.PrintOrderStatus;
@@ -22,6 +23,7 @@ import com.example.backend.entity.PrintRateEntity;
 import com.example.backend.entity.PrintType;
 import com.example.backend.repository.DocumentRepository;
 import com.example.backend.repository.AdminAccountRepository;
+import com.example.backend.repository.AuditLogRepository;
 import com.example.backend.repository.PrintOrderRepository;
 import com.example.backend.repository.PrintRateRepository;
 import com.example.backend.service.DocumentUploadService;
@@ -44,6 +46,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import tools.jackson.databind.ObjectMapper;
 import org.flywaydb.core.Flyway;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -77,6 +81,9 @@ class BackendApplicationTests {
 
 	@Autowired
 	private AdminAccountRepository adminAccountRepository;
+
+	@Autowired
+	private AuditLogRepository auditLogRepository;
 
 	@Autowired
 	private DocumentRepository documentRepository;
@@ -351,6 +358,94 @@ class BackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(4, status.get("totalPages").intValue());
 		mockMvc.perform(MockMvcRequestBuilders.get("/api/print-orders/{token}", "NOT-A-VALID-TOKEN"))
 				.andExpect(MockMvcResultMatchers.status().isNotFound());
+	}
+
+	@Test
+	void exposesProtectedAdminOrderDashboardAndAuditsPendingCancellation() throws Exception {
+		var admin = adminAccountRepository.findByUsername("test-admin").orElseThrow();
+		var adminJwt = jwt()
+				.jwt(token -> token.subject(admin.getId().toString()))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+		PrintRateEntity rate = printRateRepository.findAll().stream()
+				.filter(existing -> existing.getPrintType() == PrintType.BLACK_AND_WHITE)
+				.findFirst()
+				.orElseGet(() -> new PrintRateEntity(
+						PrintType.BLACK_AND_WHITE,
+						new java.math.BigDecimal("1.25"),
+						"INR"));
+		rate.updateRate(new java.math.BigDecimal("1.25"), "INR", true);
+		printRateRepository.save(rate);
+
+		String searchTerm = "admin-dashboard-" + UUID.randomUUID();
+		DocumentEntity document = documentRepository.save(new DocumentEntity(
+				searchTerm + ".pdf",
+				"admin-dashboard-test-" + UUID.randomUUID(),
+				"application/pdf",
+				42,
+				2,
+				"d".repeat(64)));
+		var order = printOrderService.createOrder(new CreatePrintOrderRequest(
+				document.getId(),
+				PrintType.BLACK_AND_WHITE,
+				1,
+				"A4",
+				"portrait",
+				false));
+		UUID orderId = printOrderRepository.findByToken(order.token()).orElseThrow().getId();
+
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/dashboard/stats"))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized());
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/print-orders")
+						.with(SecurityMockMvcRequestPostProcessors.user("customer").roles("CUSTOMER")))
+				.andExpect(MockMvcResultMatchers.status().isForbidden());
+
+		MvcResult listResult = mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/print-orders")
+						.param("search", searchTerm)
+						.param("status", "PENDING")
+						.param("page", "0")
+						.param("size", "10")
+						.with(adminJwt))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.items.length()").value(1))
+				.andExpect(MockMvcResultMatchers.jsonPath("$.items[0].id").value(orderId.toString()))
+				.andExpect(MockMvcResultMatchers.jsonPath("$.items[0].status").value("PENDING"))
+				.andExpect(MockMvcResultMatchers.jsonPath("$.totalItems").value(1))
+				.andReturn();
+		org.junit.jupiter.api.Assertions.assertFalse(
+				listResult.getResponse().getContentAsString().contains("storage_key"));
+
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/print-orders/{orderId}", orderId)
+						.with(adminJwt))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.documentId").value(document.getId().toString()))
+				.andExpect(MockMvcResultMatchers.jsonPath("$.attempts").isArray())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.attempts.length()").value(0));
+
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/dashboard/stats").with(adminJwt))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.totalOrders").isNumber())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.pendingOrders").isNumber())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.printedOrders").isNumber());
+
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-orders/{orderId}/cancel", orderId)
+						.with(adminJwt))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.status").value("CANCELLED"));
+
+		org.junit.jupiter.api.Assertions.assertTrue(auditLogRepository.findAll().stream()
+				.map(AuditLogEntity::getAction)
+				.anyMatch("ORDER_CANCELLED"::equals));
+
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-orders/{orderId}/cancel", orderId)
+						.with(adminJwt))
+				.andExpect(MockMvcResultMatchers.status().isConflict())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value("INVALID_ORDER_TRANSITION"));
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/admin/print-orders")
+						.param("size", "101")
+						.with(adminJwt))
+				.andExpect(MockMvcResultMatchers.status().isBadRequest());
 	}
 
 	@Test

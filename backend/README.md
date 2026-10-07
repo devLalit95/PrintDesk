@@ -2,6 +2,8 @@
 
 Spring Boot backend module for PrintDesk. The application targets Java 21 and connects to MySQL using environment-based configuration. Flyway owns schema changes; Hibernate validates mappings against the migrated schema and does not create or update production tables.
 
+For frontend request/response contracts and the implemented-versus-planned API inventory, see the project [API documentation](../apis_docs.md).
+
 ## Prerequisites
 
 - Java 21

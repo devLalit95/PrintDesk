@@ -5,10 +5,11 @@ metadata:
 
 summary:
   total_tasks: 54
-  completed_tasks: 19
-  in_progress_tasks: 0
-  pending_tasks: 35
-  completion_percentage: 35.2
+  completed_tasks: 27
+  in_progress_tasks: 1
+  partial_tasks: 4
+  pending_tasks: 22
+  completion_percentage: 50.0
 
 tasks:
   - task_id: "T001"
@@ -772,6 +773,41 @@ tasks:
 pending_tasks:
   - task_id: "T020"
     description: "Implement admin order query and dashboard APIs"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/controller/AdminPrintOrderController.java"
+          changes:
+            - change_type: "added"
+              description: "Exposes authenticated order list, detail, dashboard statistics, and pending-order cancellation routes."
+        - file: "backend/src/main/java/com/example/backend/service/admin/AdminPrintOrderService.java"
+          changes:
+            - change_type: "added"
+              description: "Implements bounded filtering/pagination, safe DTO projection, status counts, and pending-order cancellation with audit records."
+        - file: "backend/src/main/java/com/example/backend/repository/PrintOrderRepository.java"
+          changes:
+            - change_type: "modified"
+              description: "Adds dashboard filtering, document-aware order fetch, and per-status counts."
+        - file: "backend/src/main/java/com/example/backend/dto/admin/"
+          changes:
+            - change_type: "added"
+              description: "Defines dashboard page, summary, order details, print attempt, and statistics response records."
+        - file: "backend/src/test/java/com/example/backend/BackendApplicationTests.java"
+          changes:
+            - change_type: "modified"
+              description: "Verifies role authorization, search/status filters, details, counts, cancellation/audit, invalid transitions, and page-size validation."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 69
+        failed: 0
+        skipped: 0
+        failures: []
+    upstream_trace:
+      plan_item: "1.6"
+      requirements: ["REQ-008", "REQ-015"]
+      full_trace: "REQ-008,REQ-015 -> Phase-1.6 -> T020 -> secured dashboard statistics, order search/filter/page, detail, and history projections"
     blocked_by: ["T014", "T018"]
     priority: "P1"
   - task_id: "T021"
@@ -780,10 +816,35 @@ pending_tasks:
     priority: "P1"
   - task_id: "T022"
     description: "Implement guarded print, retry, and cancel operations"
+    status: "partial"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/service/admin/AdminPrintOrderService.java"
+          changes:
+            - change_type: "modified"
+              description: "Implements pending-only cancellation and audit logging; print/retry remain unavailable pending the durable queue and agent."
+    verification:
+      build_passed: true
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 69
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Pending-only cancellation, audit records, invalid transitions, and concurrent-update conflicts are covered. Print/retry are intentionally deferred per user scope choice until durable queue and authenticated agent support exist."
     blocked_by: ["T018", "T024"]
     priority: "P1"
   - task_id: "T023"
     description: "Test admin queries and action eligibility"
+    status: "partial"
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
+        passed: 69
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "All implemented admin list/detail/stats and pending-cancellation cases pass. Printer/rate and print/retry tests are deferred with their unimplemented APIs and queue."
     blocked_by: ["T020", "T021", "T022"]
     priority: "P1"
   - task_id: "T024"
@@ -840,35 +901,194 @@ pending_tasks:
     priority: "P1"
   - task_id: "T037"
     description: "Add MUI and create frontend theme and route structure"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "frontend/package.json"
+          changes:
+            - change_type: "modified"
+              description: "Added MUI, Emotion, and frontend test dependencies."
+        - file: "frontend/src/main.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Mounted the shared MUI theme and routed application."
+        - file: "frontend/src/App.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Added customer, tracking, and administrator route structure."
+    verification:
+      build_passed: true
+      notes: "Production Vite build completed successfully."
     blocked_by: ["T027"]
     priority: "P1"
   - task_id: "T038"
     description: "Create centralized Axios client and API modules"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "frontend/src/services/api.js"
+          changes:
+            - change_type: "added"
+              description: "Centralized Axios configuration, request identifiers, and Problem Details parsing."
+        - file: "frontend/src/services/customerApi.js"
+          changes:
+            - change_type: "added"
+              description: "Added API calls for upload, estimate, order submission, and token status lookup."
+        - file: "frontend/src/services/adminApi.js"
+          changes:
+            - change_type: "added"
+              description: "Added the documented administrator login call."
+        - file: "frontend/src/services/logger.js"
+          changes:
+            - change_type: "added"
+              description: "Added structured diagnostics with an allowlist that excludes credentials, tokens, bodies, and file data."
+    verification:
+      build_passed: true
+      test_results:
+        command: "npm test"
+        passed: 9
+        failed: 0
+        skipped: 0
+        failures: []
     blocked_by: ["T027"]
     priority: "P1"
   - task_id: "T039"
     description: "Add scoped frontend stores"
+    status: "in_progress"
+    implementation:
+      files_changed:
+        - file: "frontend/src/store/authStore.js"
+          changes:
+            - change_type: "added"
+              description: "Stores the admin session in memory and clears it at token expiry; customer form/order state remains local to its page."
+    verification:
+      test_results:
+        command: "npm test"
+        passed: 1
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Shared admin/printer stores are deferred until those backend APIs and shared UI flows exist."
     blocked_by: ["T037", "T038"]
     priority: "P1"
   - task_id: "T040"
     description: "Implement real customer file upload and progress"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "frontend/src/pages/CustomerPage.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Replaced simulated upload with the real multipart API, progress reporting, file metadata, and validation feedback."
+    verification:
+      test_results:
+        command: "npm test"
+        passed: 1
+        failed: 0
+        skipped: 0
+        failures: []
     blocked_by: ["T011", "T038"]
     priority: "P1"
   - task_id: "T041"
     description: "Connect print settings and server estimate"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "frontend/src/pages/CustomerPage.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Connected validated print preferences and copy count to server-derived estimates and order requests."
+    verification:
+      test_results:
+        command: "npm test"
+        passed: 1
+        failed: 0
+        skipped: 0
+        failures: []
     blocked_by: ["T015", "T038"]
     priority: "P1"
   - task_id: "T042"
     description: "Implement server-backed order confirmation and token lookup"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "frontend/src/pages/CustomerPage.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Submits print orders to the backend and presents the returned token for tracking."
+        - file: "frontend/src/pages/TrackPage.jsx"
+          changes:
+            - change_type: "added"
+              description: "Added a dedicated status lookup view that calls the public token endpoint."
+    verification:
+      test_results:
+        command: "npm test"
+        passed: 2
+        failed: 0
+        skipped: 0
+        failures: []
     blocked_by: ["T015", "T038"]
     priority: "P1"
   - task_id: "T043"
     description: "Implement admin login and protected frontend routes"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "frontend/src/pages/AdminLoginPage.jsx"
+          changes:
+            - change_type: "added"
+              description: "Added documented admin login with generic API error display."
+        - file: "frontend/src/pages/AdminPage.jsx"
+          changes:
+            - change_type: "added"
+              description: "Added protected admin placeholder, expiry display, and explicit sign-out without implying unavailable dashboard APIs."
+        - file: "frontend/src/store/authStore.js"
+          changes:
+            - change_type: "added"
+              description: "Keeps the bearer token in memory and automatically clears expired sessions."
+    verification:
+      test_results:
+        command: "npm test"
+        passed: 2
+        failed: 0
+        skipped: 0
+        failures: []
     blocked_by: ["T017", "T018", "T038"]
     priority: "P1"
   - task_id: "T044"
     description: "Implement admin dashboard and order actions"
-    blocked_by: ["T020", "T022", "T038", "T043"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "frontend/src/pages/AdminPage.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Adds order stats, search/status filters, pagination, detail/history dialog, authenticated document download, and confirmed cancellation."
+        - file: "frontend/src/services/adminApi.js"
+          changes:
+            - change_type: "modified"
+              description: "Adds protected dashboard/list/detail/cancel/download API calls using the in-memory admin token."
+        - file: "frontend/src/pages/AdminPage.test.jsx"
+          changes:
+            - change_type: "added"
+              description: "Tests dashboard loading, detail display, explicit print/retry limitation, confirmed cancellation, and load-failure handling."
+        - file: "frontend/src/global.css"
+          changes:
+            - change_type: "modified"
+              description: "Adds responsive admin dashboard, table, filter, stats, and detail styles."
+        - file: "apis_docs.md"
+          changes:
+            - change_type: "modified"
+              description: "Documents implemented admin order routes and clarifies deferred print/retry, printer/agent/rate APIs, and active-rate dependency."
+    verification:
+      test_results:
+        command: "cd frontend && npm test -- --run"
+        passed: 12
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "The selected order-management scope is implemented. Print/retry remain explicitly unavailable until durable queue and authenticated Print Agent support exist."
+    blocked_by: ["T020", "T038", "T043"]
     priority: "P1"
   - task_id: "T045"
     description: "Implement printer, agent, and pricing management UI"
@@ -876,10 +1096,48 @@ pending_tasks:
     priority: "P1"
   - task_id: "T046"
     description: "Ensure responsive and accessible frontend behavior"
+    status: "partial"
+    implementation:
+      files_changed:
+        - file: "frontend/src/pages/CustomerPage.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Keeps the clipped native file input out of the accessibility tree and tab order; keyboard users activate the visible Browse files button."
+        - file: "frontend/src/pages/AdminPage.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Adds the cancelled-order statistic and an explicit unavailable-data state when the dashboard request fails."
+        - file: "frontend/src/global.css"
+          changes:
+            - change_type: "modified"
+              description: "Displays all six order status counts in a responsive statistics grid."
+        - file: "frontend/src/pages/CustomerPage.test.jsx"
+          changes:
+            - change_type: "modified"
+              description: "Asserts that the upload control exposes one file-picker button to assistive technology."
+    verification:
+      test_results:
+        command: "cd frontend && npm test -- --run"
+        passed: 12
+        failed: 0
+        skipped: 0
+        failures: []
+      lint_passed: true
+      build_passed: true
+      notes: "The selected upload/dashboard controls and dashboard load-error state are covered; full application accessibility and printer/agent views remain outstanding."
     blocked_by: ["T040", "T041", "T042", "T043", "T044", "T045"]
     priority: "P1"
   - task_id: "T047"
     description: "Test customer/admin frontend flows"
+    status: "partial"
+    verification:
+      test_results:
+        command: "cd frontend && npm test -- --run"
+        passed: 12
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "All currently implemented customer and selected admin order-management flows pass. Printer/agent/pricing UI and related tests remain deferred under T045."
     blocked_by: ["T040", "T041", "T042", "T044", "T045"]
     priority: "P1"
   - task_id: "T048"

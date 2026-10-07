@@ -1,7 +1,7 @@
 # Online Document Printing System — Implementation Plan
 
-**Status:** Proposed; implementation has not started  
-**Last updated:** 2026-10-07  
+**Status:** In progress — backend foundation, customer workflows, and selected admin order management are implemented; printer/rate administration, durable printing, and the Print Agent remain pending  
+**Last updated:** 2026-10-08  
 **Source requirements:** [SRS.md](./SRS.md)  
 **UX guidance:** [Design.md](./Design.md)
 
@@ -151,7 +151,7 @@ Order is intentional: complete backend data and contract foundations first; then
 
 ## 6. Executable task breakdown
 
-Tasks are ordered by dependency and module. `[P]` marks work that may proceed in parallel once its stated prerequisite contracts are stable.
+Tasks are ordered by dependency and module. `[P]` marks work that may proceed in parallel once its stated prerequisite contracts are stable. `[~]` marks work partially delivered in the selected scope, with remaining functionality explicitly deferred.
 
 ### Phase 1 — Backend
 
@@ -174,10 +174,10 @@ Tasks are ordered by dependency and module. `[P]` marks work that may proceed in
 - [x] T017 [Plan:1.5] Implement BCrypt administrator credential verification, HS256 JWT issuance/validation configuration, 30-minute access tokens, and one-time environment-based initial admin provisioning under `backend/src/main/java/com/example/backend/`.
 - [x] T018 [Plan:1.5] Configure stateless JWT resource-server validation, admin/operator/agent route role checks, and non-sensitive Problem Details security failures under `backend/src/main/java/com/example/backend/config/`.
 - [x] T019 [Plan:1.5] Add bootstrap, login, JWT claims/expiry, authenticated route, and role-boundary tests under `backend/src/test/java/com/example/backend/`.
-- [ ] T020 [Plan:1.6] Implement admin order search/filter/detail/history/statistics endpoints under `backend/src/main/java/com/example/backend/controller/` and `backend/src/main/java/com/example/backend/service/`.
+- [x] T020 [Plan:1.6] Implement admin order search/filter/detail/history/statistics endpoints under `backend/src/main/java/com/example/backend/controller/` and `backend/src/main/java/com/example/backend/service/`.
 - [ ] T021 [Plan:1.6] Implement printer configuration/default and pricing read/write endpoints under `backend/src/main/java/com/example/backend/controller/` and `backend/src/main/java/com/example/backend/service/`.
-- [ ] T022 [Plan:1.6] Implement guarded print, retry, and cancel operations with audit events under `backend/src/main/java/com/example/backend/service/`.
-- [ ] T023 [P] [Plan:1.6] Add admin filtering/pagination, printer/rate authorization, and action eligibility tests under `backend/src/test/java/com/example/backend/`.
+- [~] T022 [Plan:1.6] Implement guarded print, retry, and cancel operations with audit events under `backend/src/main/java/com/example/backend/service/`; pending-only cancellation and audit are implemented, while print/retry await the durable queue and authenticated agent.
+- [~] T023 [P] [Plan:1.6] Add admin filtering/pagination, printer/rate authorization, and action eligibility tests under `backend/src/test/java/com/example/backend/`; implemented order queries and cancellation are covered, while deferred APIs/actions await implementation.
 - [ ] T024 [Plan:1.7] Implement persistent job enqueue/claim, per-printer sequential execution guards, idempotent acknowledgements, and recovery in `backend/src/main/java/com/example/backend/service/`.
 - [ ] T025 [Plan:1.7] Implement agent registration, credential validation, configuration, heartbeat, and job status endpoints under `backend/src/main/java/com/example/backend/controller/`.
 - [ ] T026 [Plan:1.7] Implement authenticated WebSocket job notifications and connection lifecycle in `backend/src/main/java/com/example/backend/websocket/`.
@@ -197,17 +197,17 @@ Tasks are ordered by dependency and module. `[P]` marks work that may proceed in
 
 ### Phase 3 — Frontend
 
-- [ ] T037 [Plan:3.1] Add the missing MUI dependencies required by `Design.md` and establish the shared theme and customer/admin route structure while retaining/reusing the existing global design tokens under `frontend/package.json` and `frontend/src/`.
-- [ ] T038 [Plan:3.1] Create a centralized Axios API client and endpoint modules under `frontend/src/services/`.
+- [x] T037 [Plan:3.1] Add the missing MUI dependencies required by `Design.md` and establish the shared theme and customer/admin route structure while retaining/reusing the existing global design tokens under `frontend/package.json` and `frontend/src/`.
+- [x] T038 [Plan:3.1] Create a centralized Axios API client and endpoint modules under `frontend/src/services/`.
 - [ ] T039 [Plan:3.1] Add narrowly scoped authentication/order/admin/printer stores under `frontend/src/store/`; keep transient form state local.
-- [ ] T040 [Plan:3.2] Replace the hard-coded sample file and simulated progress with real responsive upload, metadata, progress, and validation/error feedback under `frontend/src/components/` and `frontend/src/pages/`.
-- [ ] T041 [Plan:3.2] Connect the existing print-type, copies, paper-size, orientation, and estimate UI to validated settings and server-backed pricing under `frontend/src/components/` and `frontend/src/pages/`.
-- [ ] T042 [Plan:3.3] Replace local fake-token submission with API-backed order creation; preserve/refine confirmation and token copy, and add customer token-status lookup under `frontend/src/pages/`.
-- [ ] T043 [Plan:3.4] Implement admin login, protected navigation, and session-expiry handling under `frontend/src/pages/`, `frontend/src/layouts/`, and `frontend/src/services/`.
-- [ ] T044 [Plan:3.4] Implement dashboard statistics, order table/details, search/filter/pagination, status, print, retry, cancel, and history views under `frontend/src/pages/` and `frontend/src/components/`.
+- [x] T040 [Plan:3.2] Replace the hard-coded sample file and simulated progress with real responsive upload, metadata, progress, and validation/error feedback under `frontend/src/components/` and `frontend/src/pages/`.
+- [x] T041 [Plan:3.2] Connect the existing print-type, copies, paper-size, orientation, and estimate UI to validated settings and server-backed pricing under `frontend/src/components/` and `frontend/src/pages/`.
+- [x] T042 [Plan:3.3] Replace local fake-token submission with API-backed order creation; preserve/refine confirmation and token copy, and add customer token-status lookup under `frontend/src/pages/`.
+- [x] T043 [Plan:3.4] Implement admin login, protected navigation, and session-expiry handling under `frontend/src/pages/`, `frontend/src/layouts/`, and `frontend/src/services/`.
+- [x] T044 [Plan:3.4] Implement dashboard statistics, order table/details, search/filter/pagination, status, cancellation, and history views under `frontend/src/pages/` and `frontend/src/components/`; print/retry are explicitly deferred until queue/agent support exists.
 - [ ] T045 [Plan:3.5] Implement printer/agent management and pricing configuration views under `frontend/src/pages/` and `frontend/src/components/`.
-- [ ] T046 [Plan:3.1,3.2,3.3,3.4,3.5] Ensure responsive behavior, keyboard access, visible focus, accessible status text, and loading/empty/error states throughout `frontend/src/`.
-- [ ] T047 [P] [Plan:3.2,3.3,3.4,3.5] Add frontend tests for upload interactions, estimate rendering, token status, protected routes, and admin actions under `frontend/src/`.
+- [~] T046 [Plan:3.1,3.2,3.3,3.4,3.5] Ensure responsive behavior, keyboard access, visible focus, accessible status text, and loading/empty/error states throughout `frontend/src/`; selected upload/dashboard states are implemented, while whole-application and printer/agent coverage remains.
+- [~] T047 [P] [Plan:3.2,3.3,3.4,3.5] Add frontend tests for upload interactions, estimate rendering, token status, protected routes, and currently implemented admin order actions under `frontend/src/`; printer/agent/pricing UI coverage awaits T045.
 
 ### Phase 4 — Integration and readiness
 

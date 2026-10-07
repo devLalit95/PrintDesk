@@ -13,6 +13,7 @@ import com.example.backend.service.document.DocumentStorageException;
 import com.example.backend.service.document.DocumentTooLargeException;
 import com.example.backend.service.document.InvalidDocumentException;
 import com.example.backend.service.admin.InvalidAdminCredentialsException;
+import com.example.backend.service.admin.InvalidAdminOrderQueryException;
 import com.example.backend.service.order.InvalidPrintOrderRequestException;
 import com.example.backend.service.order.OrderTokenGenerationException;
 import com.example.backend.service.order.PrintOrderNotFoundException;
@@ -22,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -227,6 +229,20 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleConcurrentOrderUpdate(
+            ObjectOptimisticLockingFailureException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.CONFLICT,
+                "Order changed",
+                "The order was changed by another request. Refresh it and try again.",
+                "urn:printdesk:problem:concurrent-order-update",
+                "CONCURRENT_ORDER_UPDATE",
+                request);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
     @ExceptionHandler(OrderTokenGenerationException.class)
     public ResponseEntity<ProblemDetail> handleOrderTokenGenerationFailure(
             OrderTokenGenerationException exception,
@@ -253,6 +269,20 @@ public class ApiExceptionHandler {
                 "INVALID_ADMIN_CREDENTIALS",
                 request);
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+    }
+
+    @ExceptionHandler(InvalidAdminOrderQueryException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidAdminOrderQuery(
+            InvalidAdminOrderQueryException exception,
+            HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid admin order query",
+                exception.getMessage(),
+                "urn:printdesk:problem:invalid-admin-order-query",
+                "INVALID_ADMIN_ORDER_QUERY",
+                request);
+        return ResponseEntity.badRequest().body(problem);
     }
 
     private ProblemDetail createProblem(

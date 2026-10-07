@@ -1,20 +1,20 @@
 # PrintDesk — Current Progress
 
 **Last updated:** 2026-10-08  
-**Overall status:** Backend implementation in progress  
-**Current phase:** Phase 1 — Backend foundation, customer orders, and administrator authentication (T001–T019 complete)
+**Overall status:** Backend foundation, customer flows, and selected admin order management implemented; queue/agent/printer administration remain pending  
+**Current phase:** Phase 3 — customer upload/order flows and admin order-management dashboard delivered in the selected scope; T045 and broader integration remain pending
 
 ## 1. Current implementation baseline
 
 | Module | Observed state | Not yet present |
 |---|---|---|
-| Backend | Java 21 / Spring Boot Maven module. Foundation includes Actuator, Spring MVC/Jackson, Spring Data JPA, stateless JWT Security, Validation, WebSocket, MySQL 8.4/Flyway dependencies, externalized datasource settings, Hibernate schema validation, test-scoped H2, RFC 9457-style errors, core entities/repositories/V1 schema, upload validation/storage, persisted document metadata, PDF/image/DOCX page counting, upload/download APIs, server-owned pricing quotes, order creation/status services, secure tokens, guarded order transitions, public pricing/order/status APIs, one-time admin bootstrap, BCrypt login, 30-minute JWTs, and role-gated routes. | Print Agent credential provider, queue processing, agent APIs, admin operations, audit events. |
-| Frontend | React/Vite app with a customer-flow UI prototype in `App.jsx`: sample upload progress, B&W/color, copies, paper size/orientation, local estimate, fake token confirmation, and global CSS/theme tokens. Existing dependencies include React, React Router, Zustand, Framer Motion, Axios, Vite, and ESLint. | Replace dummy document/progress/token/pricing with backend behavior; add token lookup, admin application, MUI dependency required by `Design.md`, API modules, auth/order/printer state, and UI tests. |
+| Backend | Java 21 / Spring Boot Maven module. Foundation includes Actuator, Spring MVC/Jackson, Spring Data JPA, stateless JWT Security, Validation, WebSocket, MySQL 8.4/Flyway dependencies, externalized datasource settings, Hibernate schema validation, test-scoped H2, RFC 9457-style errors, core entities/repositories/V1 schema, upload validation/storage, persisted document metadata, PDF/image/DOCX page counting, upload/download APIs, server-owned pricing quotes, order creation/status services, secure tokens, guarded order transitions, public pricing/order/status APIs, one-time admin bootstrap, BCrypt login, 30-minute JWTs, role-gated routes, and protected order-management statistics/list/detail/cancellation with audit records. | Print Agent credential provider, durable queue processing, agent APIs, printer/rate administration, and print/retry operations. |
+| Frontend | React/Vite app with MUI theme and routed customer/admin screens; real document upload/progress, server estimate, order submission/token confirmation, token status lookup, admin login with in-memory JWT session expiry, protected order-management dashboard, search/status filters, pagination, details/history, document download, confirmed pending cancellation, centralized API client, and privacy-conscious structured diagnostics. | Printer/agent/pricing management and print/retry UI await backend/agent support; broader responsive/accessibility/browser acceptance coverage remains. |
 | Print Agent | No `print-agent/` module is present in the observed project structure. | Agent registration, WebSocket client, printer discovery, OS print adapter, job recovery and reporting. |
 | Database / storage | MySQL 8.4 LTS target, environment-based datasource/Flyway configuration, private local storage adapter, and document metadata persistence are in place; V1 schema has passed H2 MySQL-mode validation. | Real MySQL 8.4 integration verification, local DB provisioning, and retention handling. |
-| Product behavior | Real document upload, format validation, page counting, metadata persistence, protected download routes, server-side quote calculation, persisted order creation, public token status lookup, guarded status transitions, and administrator login/JWT role checks are implemented and tested; frontend remains a non-integrated customer-flow prototype. | Print Agent, queue operations, admin operations, and physical printing are not implemented. |
+| Product behavior | Real document upload, format validation, page counting, metadata persistence, protected download routes, server-side quote calculation, persisted order creation, public token status lookup, guarded status transitions, administrator login/JWT role checks, and API-backed customer/admin order-management flows are implemented and tested. | Print Agent, durable queue operations, printer/rate administration, print/retry actions, and physical printing are not implemented. |
 
-The workspace scan did not find `frontend/src/services/api.js`; treat it as absent unless it is added later. The current environment also does not identify the workspace root as a Git repository, so this progress file does not claim a clean/dirty VCS status.
+The current environment does not identify the workspace root as a Git repository, so this progress file does not claim a clean/dirty VCS status.
 
 ## 2. Documentation and planning status
 
@@ -22,22 +22,22 @@ The workspace scan did not find `frontend/src/services/api.js`; treat it as abse
 - [x] Record the implementation baseline from the existing backend and frontend scaffold.
 - [x] Create [plan.md](./plan.md), with backend-first module sequencing, task breakdown, acceptance gates, and SRS-to-plan traceability.
 - [x] Create [rules.md](./rules.md), with security, architecture, scope, and quality rules.
-- [ ] Confirm open implementation decisions listed in `plan.md` §9.
+- [ ] Confirm remaining open implementation decisions listed in `plan.md` §9.
 - [x] Begin backend implementation; completed T001–T019.
 
 ## 3. Planned delivery status
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Backend foundation, data model, secure documents, pricing/orders, admin APIs, durable queue and agent contract | In progress — T001–T019 complete; next are admin operations and the persistent print queue (T020–T028) |
+| 1 | Backend foundation, data model, secure documents, pricing/orders, admin APIs, durable queue and agent contract | In progress — T001–T020 complete; pending-only cancellation is implemented, while printer/rate administration, print/retry, queue, and agent work remain pending/partial (T021–T028) |
 | 2 | Separate Java Print Agent, enrollment, discovery, OS printing, retry and recovery | Not started |
-| 3 | Customer and administrator React application | Not started |
+| 3 | Customer and administrator React application | In progress — customer upload/order flow and selected admin dashboard/search/details/download/cancel are implemented; printer/rate UI and physical print actions remain |
 | 4 | End-to-end integration, real-printer acceptance, deployment and handover | Not started |
 
 ## 4. Validation evidence
 
 - Initial baseline `./mvnw test` used Java 17 and failed because the project targets Java 21.
-- Latest full `./mvnw test` with `/usr/lib/jvm/java-21-openjdk-amd64`: **68 tests passed, 0 failed, 0 skipped**.
+- Latest full `./mvnw test` with `/usr/lib/jvm/java-21-openjdk-amd64`: **69 tests passed, 0 failed, 0 skipped**.
 - `./mvnw dependency:tree -DskipTests` with the Maven wrapper resolved the declared Spring Boot 4.1.1 and MySQL dependencies successfully.
 - With Flyway selected, `./mvnw test dependency:tree` under Java 21 passed; Spring Boot Flyway and MySQL Flyway artifacts resolved.
 - The first Java 21 test run exposed that the newly enabled JPA auto-configuration needs a datasource URL. Added test-scoped H2 and set the smoke-test URL; this is for context startup only and is not evidence of MySQL compatibility.
@@ -79,12 +79,35 @@ Track and resolve the implementation decisions in [plan.md](./plan.md) §9, espe
 - **T017:** Added BCrypt-based admin credential verification, timing-equalized generic login failures, one-time environment bootstrap, base64 HMAC key validation, and signed 30-minute HS256 JWT access-token issuance.
 - **T018:** Added stateless bearer-token decoding with issuer/expiry validation, role-based admin/operator/agent route gates, and consistent non-sensitive 401/403 Problem Details responses.
 - **T019:** Added tests for bootstrap idempotence and invalid setup, generic login failures, valid JWT claims and expiry, authenticated admin routes, and denied role access.
-- All current backend checks: 68 tests passed, including pricing and order behavior, H2-backed order/document persistence, real local LibreOffice DOCX conversion, and MockMvc upload/download/order/admin-auth flows.
+- Latest full backend check: **69 tests passed, 0 failed, 0 skipped**, including pricing and order behavior, H2-backed persistence, local LibreOffice DOCX conversion, MockMvc upload/download/order/auth flows, and admin order-management authorization/query/cancellation behavior.
 - Added unit coverage for validation/malformed-request error shapes and retained the context-load smoke test.
 - Local MySQL provisioning and actual MySQL-backed integration verification remain pending.
+- Frontend validation after dashboard integration: `npm test -- --run` — **12 tests passed** across 6 files; `npm run lint` passed; `npm run build` passed. Browser smoke checks loaded the customer page and verified unauthenticated `/admin` redirects to login; `/actuator/health` returned `UP`.
+- The production build exits successfully with a non-blocking ~743 kB minified JavaScript chunk warning and a Vite notice that OXC configuration takes precedence over the configured esbuild option.
+- Production dependency audit (`npm audit --omit=dev`) reports **0 vulnerabilities**. The earlier full install audit reported 3 development/transitive dependency findings (1 moderate, 2 critical); these were not remediated in this UI task.
 
 ## 8. Scope reminders
 
 - Payment processing is deliberately deferred from Version 1.
 - The Print Agent, not a web browser, performs physical printing.
 - Mark acceptance complete only after a real-printer test proves the supported deployment path does not open a browser preview/dialog.
+
+## 9. Frontend implementation batches
+
+- **T037:** Added MUI/Emotion dependencies, shared MUI theme, routed application shell, and responsive shared styling.
+- **T038:** Added the Axios client, request identifiers, Problem Details handling, customer/admin API modules, Vite API proxy, and structured privacy-conscious logging.
+- **T040–T042:** Replaced prototype interactions with file upload and progress, server pricing estimates, order creation, confirmation-token copy, and token-based order lookup.
+- **T043:** Added admin login, guarded admin navigation, in-memory token handling, manual sign-out, and automatic session clearing at JWT expiration. No unsupported dashboard APIs are presented as implemented.
+- **T047 (partial):** Frontend tests cover upload/estimate/order creation, invalid file-type rejection, token lookup, admin login, API error handling, logger privacy, token expiration, admin dashboard/detail/cancellation, and dashboard load failure. Printer/agent/pricing UI coverage awaits T045.
+- Production build succeeds with the warnings recorded in §7; code splitting can be considered separately.
+
+## 10. Admin order dashboard batch
+
+- **T020:** Added authenticated dashboard statistics, paginated/searchable/status-filtered order listing, order detail and print-attempt history projections. Requests are bounded and responses exclude storage keys, digests, and credential material.
+- **T022 (partial):** Added audited cancellation for `PENDING` orders with lifecycle conflict handling. Print/retry are intentionally not exposed until durable queue and authenticated Print Agent work is complete.
+- **T023 (partial):** Added integration coverage for admin role protection, list filtering, details, statistics, pending cancellation, repeated-cancel conflict, concurrent-update conflict, and page-size validation. Printer/rate and print/retry tests remain deferred with those features.
+- **T044 (complete in the selected order-management scope):** Replaced the admin placeholder with statistics cards, search/status filters, pagination, details/history, authorized document download, and confirmed cancellation. The dashboard explicitly states printing/retry are unavailable; it never marks an order as printing.
+- Customer upload control now exposes a single browse button, supports keyboard activation, retains drop support, and permits selecting the same file again after validation.
+- **T046 (partial):** Kept the visually clipped native file input out of the accessibility tree/tab order while retaining keyboard-operable Browse files activation; added all-status statistics and an explicit dashboard-data failure state. Whole-application accessibility review remains.
+- The customer estimate/order API requires active print rates. No rate-management API or pricing values were added in this order-management-only scope, so customer estimates/orders still require rates to be configured separately.
+- Admin API contract and frontend integration are documented in [apis_docs.md](./apis_docs.md).
