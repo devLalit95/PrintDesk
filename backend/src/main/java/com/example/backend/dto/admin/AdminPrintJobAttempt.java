@@ -9,6 +9,7 @@ public record AdminPrintJobAttempt(
         UUID id,
         int attemptNumber,
         PrintJobStatus status,
+        String errorCode,
         String errorMessage,
         Instant queuedAt,
         Instant startedAt,

@@ -14,6 +14,12 @@ import com.example.backend.service.document.DocumentTooLargeException;
 import com.example.backend.service.document.InvalidDocumentException;
 import com.example.backend.service.admin.InvalidAdminCredentialsException;
 import com.example.backend.service.admin.InvalidAdminOrderQueryException;
+import com.example.backend.service.agent.AgentNotFoundException;
+import com.example.backend.service.agent.InvalidAgentCredentialsException;
+import com.example.backend.service.agent.InvalidAgentOperationException;
+import com.example.backend.service.agent.IdempotencyKeyReusedException;
+import com.example.backend.service.agent.InvalidPrintJobOperationException;
+import com.example.backend.service.agent.PrintJobNotFoundException;
 import com.example.backend.service.order.InvalidPrintOrderRequestException;
 import com.example.backend.service.order.OrderTokenGenerationException;
 import com.example.backend.service.order.PrintOrderNotFoundException;
@@ -283,6 +289,84 @@ public class ApiExceptionHandler {
                 "INVALID_ADMIN_ORDER_QUERY",
                 request);
         return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(InvalidAgentCredentialsException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidAgentCredentials(HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.UNAUTHORIZED,
+                "Invalid agent credentials",
+                "The agent credentials are invalid.",
+                "urn:printdesk:problem:invalid-agent-credentials",
+                "INVALID_AGENT_CREDENTIALS",
+                request);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+    }
+
+    @ExceptionHandler(AgentNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleAgentNotFound(HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.NOT_FOUND,
+                "Agent not found",
+                "The requested agent is unavailable.",
+                "urn:printdesk:problem:agent-not-found",
+                "RESOURCE_NOT_FOUND",
+                request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InvalidAgentOperationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidAgentOperation(
+            InvalidAgentOperationException exception,
+            HttpServletRequest request) {
+        HttpStatus status = exception.isConflict() ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+        ProblemDetail problem = createProblem(
+                status,
+                exception.isConflict() ? "Agent conflict" : "Invalid agent request",
+                exception.getMessage(),
+                "urn:printdesk:problem:invalid-agent-operation",
+                exception.isConflict() ? "AGENT_CONFLICT" : "VALIDATION_ERROR",
+                request);
+        return ResponseEntity.status(status).body(problem);
+    }
+
+    @ExceptionHandler(PrintJobNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handlePrintJobNotFound(HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.NOT_FOUND,
+                "Print job not found",
+                "The requested print job is unavailable.",
+                "urn:printdesk:problem:print-job-not-found",
+                "RESOURCE_NOT_FOUND",
+                request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InvalidPrintJobOperationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPrintJobOperation(
+            InvalidPrintJobOperationException exception,
+            HttpServletRequest request) {
+        HttpStatus status = exception.isConflict() ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+        ProblemDetail problem = createProblem(
+                status,
+                exception.isConflict() ? "Invalid print-job transition" : "Invalid print-job request",
+                exception.getMessage(),
+                "urn:printdesk:problem:invalid-print-job-operation",
+                exception.isConflict() ? "INVALID_JOB_TRANSITION" : "VALIDATION_ERROR",
+                request);
+        return ResponseEntity.status(status).body(problem);
+    }
+
+    @ExceptionHandler(IdempotencyKeyReusedException.class)
+    public ResponseEntity<ProblemDetail> handleIdempotencyKeyReuse(HttpServletRequest request) {
+        ProblemDetail problem = createProblem(
+                HttpStatus.CONFLICT,
+                "Idempotency key reused",
+                "An event identifier cannot be reused with a different payload.",
+                "urn:printdesk:problem:idempotency-key-reused",
+                "IDEMPOTENCY_KEY_REUSED",
+                request);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
     private ProblemDetail createProblem(

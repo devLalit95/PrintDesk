@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 
 import com.example.backend.entity.AdminAccountEntity;
+import com.example.backend.entity.PrintAgentEntity;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -39,6 +40,23 @@ public class JwtTokenService {
                 .expiresAt(expiresAt)
                 .claim("username", account.getUsername())
                 .claim("authorities", List.of("ROLE_" + account.getRole().name()))
+                .build();
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        return new IssuedAccessToken(
+                jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue(),
+                expiresAt);
+    }
+
+    public IssuedAccessToken issueAgentAccessToken(PrintAgentEntity agent) {
+        Instant issuedAt = Instant.now();
+        Instant expiresAt = issuedAt.plus(Duration.ofMinutes(5));
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(issuer)
+                .subject(agent.getAgentCode())
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .claim("agentId", agent.getId().toString())
+                .claim("authorities", List.of("ROLE_AGENT"))
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         return new IssuedAccessToken(

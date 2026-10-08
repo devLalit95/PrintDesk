@@ -136,8 +136,11 @@ public class PrintOrderEntity extends BaseEntity {
                     || nextStatus == PrintOrderStatus.FAILED
                     || nextStatus == PrintOrderStatus.CANCELLED;
             case PRINTING -> nextStatus == PrintOrderStatus.PRINTED
-                    || nextStatus == PrintOrderStatus.FAILED;
+                    || nextStatus == PrintOrderStatus.FAILED
+                    || nextStatus == PrintOrderStatus.OUTCOME_UNKNOWN;
             case FAILED -> nextStatus == PrintOrderStatus.PRINT_REQUESTED;
+            case OUTCOME_UNKNOWN -> nextStatus == PrintOrderStatus.PRINTED
+                    || nextStatus == PrintOrderStatus.FAILED;
             case PRINTED, CANCELLED -> false;
         };
     }

@@ -46,6 +46,7 @@ const orderStatuses = [
   'PRINTING',
   'PRINTED',
   'FAILED',
+  'OUTCOME_UNKNOWN',
   'CANCELLED',
 ]
 
@@ -221,7 +222,7 @@ function AdminPage() {
       </Box>
 
       <Alert className="admin-api-notice" severity="info">
-        Print and retry are unavailable until the authenticated Print Agent and durable print queue are implemented. Orders will not be marked as printing from this dashboard.
+        This dashboard does not yet expose print or retry controls. Queue and agent APIs are available, but the local agent transport and authenticated notification loop are not integrated.
       </Alert>
       {notice && <Alert className="admin-notice-message" onClose={() => setNotice('')} severity="success">{notice}</Alert>}
       {error && <Alert className="admin-notice-message" onClose={() => setError('')} severity="error">{error}</Alert>}
@@ -232,6 +233,7 @@ function AdminPage() {
         <StatCard label="In progress" value={stats?.inProgressOrders} />
         <StatCard label="Printed" value={stats?.printedOrders} />
         <StatCard label="Failed" value={stats?.failedOrders} />
+        <StatCard label="Needs outcome review" value={stats?.outcomeUnknownOrders} />
         <StatCard label="Cancelled" value={stats?.cancelledOrders} />
       </Box>
 

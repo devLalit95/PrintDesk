@@ -65,6 +65,13 @@ public class SecurityConfiguration {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/print-orders/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/admin/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/agents/authenticate").permitAll()
+                        .requestMatchers("/ws/agents", "/ws/agents/**").permitAll()
+                        .requestMatchers(
+                                "/api/admin/agents",
+                                "/api/admin/agents/**",
+                                "/api/admin/print-jobs/*/resolve-unknown")
+                        .hasAuthority("ROLE_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR")
                         .requestMatchers("/api/agents/**").hasAuthority("ROLE_AGENT")
                         .requestMatchers("/api/print-orders/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR")

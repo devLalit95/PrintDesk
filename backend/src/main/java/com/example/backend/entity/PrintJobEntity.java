@@ -55,6 +55,9 @@ public class PrintJobEntity extends BaseEntity {
     @Column(name = "error_message", length = 2000)
     private String errorMessage;
 
+    @Column(name = "error_code", length = 64)
+    private String errorCode;
+
     @Column(name = "queued_at", nullable = false)
     private Instant queuedAt;
 
@@ -99,8 +102,22 @@ public class PrintJobEntity extends BaseEntity {
     }
 
     public void complete(PrintJobStatus finalStatus, String errorMessage, Instant completedAt) {
+        complete(finalStatus, null, errorMessage, completedAt);
+    }
+
+    public void complete(
+            PrintJobStatus finalStatus,
+            String errorCode,
+            String errorMessage,
+            Instant completedAt) {
         this.status = finalStatus;
+        this.errorCode = errorCode;
         this.errorMessage = errorMessage;
         this.completedAt = completedAt;
+    }
+
+    public void releaseClaim() {
+        this.status = PrintJobStatus.QUEUED;
+        this.claimedAt = null;
     }
 }

@@ -7,5 +7,6 @@ public enum PrintOrderStatus {
     PRINTING,
     PRINTED,
     FAILED,
+    OUTCOME_UNKNOWN,
     CANCELLED
 }

@@ -26,9 +26,9 @@ This document is the frontend-facing API reference for PrintDesk. It distinguish
 | Customer documents | Customer web flow | Implemented | Upload a document; authorized users/agents can later download it. |
 | Customer pricing and orders | Customer web flow | Implemented | Estimate price, submit an order, and look up order status by token. |
 | Admin authentication | Admin web flow | Implemented | Exchange username/password for a bearer token. |
-| Admin order operations | Admin web flow | Partly implemented | Protected order search/list/detail, status statistics, and cancellation. Print/retry are deferred until durable queue and agent support exist. |
+| Admin order operations | Admin web flow | Partly implemented | Protected order search/list/detail, statistics, cancellation, and backend print/retry/review operations; the frontend actions remain deferred until the agent transport is integrated. |
 | Printer and pricing management | Admin web flow | Planned | Read/update printers and print rates. |
-| Print Agent | Agent application; admin UI may display agent state | Planned | Registration, configuration, heartbeat/job status, and WebSocket notification. |
+| Print Agent | Agent application; admin UI may display agent state | Partly implemented | Admin credential management, agent authentication, configuration, and heartbeat/printer discovery; durable queue and WebSocket notification remain planned. |
 | Management | Operations | Partly implemented | Public health check and authenticated Actuator information. |
 
 ## 3. Customer APIs — documents
@@ -175,7 +175,7 @@ Response (`PrintOrderStatusResponse`):
 }
 ```
 
-Current order status values: `PENDING`, `PRINT_REQUESTED`, `QUEUED`, `PRINTING`, `PRINTED`, `FAILED`, `CANCELLED`.
+Current order status values: `PENDING`, `PRINT_REQUESTED`, `QUEUED`, `PRINTING`, `PRINTED`, `FAILED`, `OUTCOME_UNKNOWN`, `CANCELLED`. `OUTCOME_UNKNOWN` requires administrator review before it can be resolved as failed and retried.
 
 ## 5. Admin APIs — authentication
 
@@ -273,13 +273,14 @@ Dashboard statistics response (`AdminDashboardStats`):
   "inProgressOrders": 2,
   "printedOrders": 5,
   "failedOrders": 1,
+  "outcomeUnknownOrders": 1,
   "cancelledOrders": 0
 }
 ```
 
-`inProgressOrders` aggregates `PRINT_REQUESTED`, `QUEUED`, and `PRINTING`.
+`inProgressOrders` aggregates `PRINT_REQUESTED`, `QUEUED`, and `PRINTING`. `outcomeUnknownOrders` counts jobs/orders paused for physical administrator review; it is not included as actively printing.
 
-Cancellation request: empty `POST /api/admin/print-orders/{id}/cancel`. The response is the updated `AdminPrintOrderDetail`, with status `CANCELLED`. The backend writes an audit record with the authenticated admin ID and old/new status. Print/retry APIs are deliberately not exposed yet; the UI must not imply physical printing can be started.
+Cancellation request: empty `POST /api/admin/print-orders/{id}/cancel`. The response is the updated `AdminPrintOrderDetail`, with status `CANCELLED`. The backend writes an audit record with the authenticated admin ID and old/new status. `POST /api/admin/print-orders/{id}/print` enqueues an eligible pending order and `POST /api/admin/print-jobs/{jobId}/retry` retries an eligible failed attempt, both returning `202 Accepted`. At most three attempts are allowed per order. `OUTCOME_UNKNOWN` requires the ADMIN-only physical-review endpoint before retry. The frontend must not imply the physical job has completed merely because it was queued.
 
 ## 7. Printer and pricing APIs
 
@@ -297,17 +298,27 @@ Admin printer/rate mutations are intended to require the admin/operator bearer-t
 
 ## 8. Print Agent APIs and events
 
-The SRS specifies the following Print Agent interface, but no agent REST controller, agent-authentication flow, or WebSocket contract is currently implemented:
+The detailed backend/agent request, response, error, lifecycle, and event contracts are defined in [`backend/docs/api-contract.md`](backend/docs/api-contract.md). Implemented routes are:
 
-| Method / protocol | Path | Intended use | Contract status |
+| Method | Path | Authentication | Status |
 |---|---|---|---|
-| `POST` | `/api/print-agent/register` | Register/enroll an agent. | Planned; request/response and credential lifecycle TBD. |
-| `GET` | `/api/print-agent/config` | Retrieve agent configuration. | Planned; response schema TBD. |
-| `POST` | `/api/print-agent/status` | Report agent heartbeat/availability. | Planned; request/response schema TBD. |
-| `POST` | `/api/print-agent/jobs/{id}/status` | Report print-job lifecycle/result. | Planned; request/response schema TBD. |
-| WebSocket | `/ws/print-agent` | Deliver authenticated job notifications. | Planned; authentication, destinations, event payloads, and reconnect/acknowledgement behavior TBD. |
+| `POST` | `/api/admin/agents` | `ROLE_ADMIN` | Implemented: provision identity; secret is accepted once and only a BCrypt hash is stored. |
+| `PUT` | `/api/admin/agents/{agentCode}/credential` | `ROLE_ADMIN` | Implemented: rotate the agent secret. |
+| `DELETE` | `/api/admin/agents/{agentCode}` | `ROLE_ADMIN` | Implemented: revoke the agent and reject its existing JWT on subsequent protected calls. |
+| `POST` | `/api/agents/authenticate` | Public bootstrap route | Implemented: exchange agent code/secret for a five-minute bearer JWT. |
+| `PUT` | `/api/agents/me/heartbeat` | `ROLE_AGENT` | Implemented: report liveness and upsert discovered printer capabilities. |
+| `GET` | `/api/agents/me/config` | `ROLE_AGENT` | Implemented: return heartbeat, concurrency, WebSocket, and download limits. |
+| `POST` | `/api/agents/jobs/claim` | `ROLE_AGENT` | Implemented: atomically claim the next assigned job for a printer; repeat claim is idempotent. |
+| `POST` | `/api/agents/jobs/{jobId}/events` | `ROLE_AGENT` | Implemented: idempotently report print lifecycle events and sanitized error details. |
+| `POST` | `/api/admin/print-orders/{orderId}/print` | `ROLE_ADMIN` / `ROLE_OPERATOR` | Implemented: create the first durable print attempt. |
+| `POST` | `/api/admin/print-jobs/{jobId}/retry` | `ROLE_ADMIN` / `ROLE_OPERATOR` | Implemented: retry an eligible failed attempt, capped at three total attempts per order. |
+| `POST` | `/api/admin/print-jobs/{jobId}/resolve-unknown` | `ROLE_ADMIN` | Implemented: explicitly adjudicate an uncertain outcome; does not print. |
 
-These routes are for the separate Print Agent, not normal browser calls. The admin UI should consume safe admin dashboard/printer/agent APIs rather than connecting to the agent's WebSocket directly.
+| `STOMP` | `/ws/agents` | STOMP `CONNECT` with `ROLE_AGENT` bearer JWT | Implemented: authenticated job-available notifications. Subscribe only to `/user/queue/jobs`; clients cannot send messages. |
+
+The WebSocket handshake itself is public; agent authentication and active-status validation happen on STOMP `CONNECT` and subsequent frames. Job-available messages are sent after the queue transaction commits and are best-effort hints; agents must claim through REST after connecting/reconnecting and on notification. Automatic stale-agent/stale-job recovery remains **planned and unimplemented**. These APIs are for the separate Print Agent, not normal browser calls.
+
+The admin UI should consume safe admin dashboard/printer/agent APIs rather than connecting to the agent's WebSocket directly. The separate Java agent now implements the documented REST/STOMP flow; it still requires a provisioned live-backend test and physical-printer acceptance before production operation.
 
 ## 9. Management and observability APIs
 
@@ -388,7 +399,7 @@ The frontend should use the DTOs below as API contracts. These DTOs are immutabl
 Shared enums currently used in API/domain contracts:
 
 - `PrintType`: `BLACK_AND_WHITE`, `COLOR`.
-- `PrintOrderStatus`: `PENDING`, `PRINT_REQUESTED`, `QUEUED`, `PRINTING`, `PRINTED`, `FAILED`, `CANCELLED`.
+- `PrintOrderStatus`: `PENDING`, `PRINT_REQUESTED`, `QUEUED`, `PRINTING`, `PRINTED`, `FAILED`, `OUTCOME_UNKNOWN`, `CANCELLED`.
 - `AdminRole`: `ADMIN`, `OPERATOR`.
 - Planned agent/job enums: `PrintAgentStatus` (`ONLINE`, `OFFLINE`, `REVOKED`) and `PrintJobStatus` (`QUEUED`, `CLAIMED`, `PRINTING`, `PRINTED`, `FAILED`, `CANCELLED`, `OUTCOME_UNKNOWN`). They are not yet emitted by an agent API.
 

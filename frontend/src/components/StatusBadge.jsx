@@ -7,6 +7,7 @@ const statusColors = {
   PRINTING: 'primary',
   PRINTED: 'success',
   FAILED: 'error',
+  OUTCOME_UNKNOWN: 'warning',
   CANCELLED: 'default',
 }
 

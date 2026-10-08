@@ -5,11 +5,11 @@ metadata:
 
 summary:
   total_tasks: 54
-  completed_tasks: 27
+  completed_tasks: 37
   in_progress_tasks: 1
-  partial_tasks: 4
-  pending_tasks: 22
-  completion_percentage: 50.0
+  partial_tasks: 6
+  pending_tasks: 10
+  completion_percentage: 68.5
 
 tasks:
   - task_id: "T001"
@@ -816,23 +816,29 @@ pending_tasks:
     priority: "P1"
   - task_id: "T022"
     description: "Implement guarded print, retry, and cancel operations"
-    status: "partial"
+    status: "completed"
     implementation:
       files_changed:
+        - file: "backend/src/main/java/com/example/backend/service/admin/AdminPrintQueueService.java"
+          changes:
+            - change_type: "added"
+              description: "Enqueues pending orders, creates audited retries up to three total attempts, and requires administrator adjudication for uncertain outcomes."
+        - file: "backend/src/main/java/com/example/backend/controller/AdminPrintOrderController.java"
+          changes:
+            - change_type: "modified"
+              description: "Exposes protected print, retry, and ADMIN-only uncertain-outcome resolution routes."
         - file: "backend/src/main/java/com/example/backend/service/admin/AdminPrintOrderService.java"
           changes:
             - change_type: "modified"
-              description: "Implements pending-only cancellation and audit logging; print/retry remain unavailable pending the durable queue and agent."
+              description: "Retains guarded pending cancellation and includes error codes in safe attempt projections."
     verification:
-      build_passed: true
       test_results:
         command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw test"
-        passed: 69
+        passed: 71
         failed: 0
         skipped: 0
         failures: []
-      notes: "Pending-only cancellation, audit records, invalid transitions, and concurrent-update conflicts are covered. Print/retry are intentionally deferred per user scope choice until durable queue and authenticated agent support exist."
-    blocked_by: ["T018", "T024"]
+      notes: "Pending-only cancellation, print enqueue, three-attempt cap, failed retry, unknown-outcome admin review, and audit behavior pass integration tests."
     priority: "P1"
   - task_id: "T023"
     description: "Test admin queries and action eligibility"
@@ -849,19 +855,130 @@ pending_tasks:
     priority: "P1"
   - task_id: "T024"
     description: "Implement persistent queue, serialized claims, and recovery"
-    blocked_by: ["T004", "T005", "T007", "Queue recovery policy decision"]
+    status: "partial"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/service/admin/AdminPrintQueueService.java"
+          changes:
+            - change_type: "added"
+              description: "Persists initial and retry attempts, enforces the three-attempt cap, and protects unknown outcomes behind ADMIN review."
+        - file: "backend/src/main/java/com/example/backend/service/agent/AgentPrintJobService.java"
+          changes:
+            - change_type: "added"
+              description: "Claims sequentially with database locks, resumes the same claim idempotently, validates lifecycle transitions, and sanitizes errors."
+        - file: "backend/src/main/java/com/example/backend/entity/PrintJobEventEntity.java"
+          changes:
+            - change_type: "added"
+              description: "Persists event IDs and payloads under a unique job/event constraint for reconnect-safe acknowledgements."
+        - file: "backend/src/main/resources/db/migration/V3__add_print_job_events.sql"
+          changes:
+            - change_type: "added"
+              description: "Adds durable print-job event storage and terminal error codes."
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn -q -f backend/pom.xml -Dtest=BackendApplicationTests test"
+        passed: 10
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Integration covers serial per-printer execution, idempotent claim/event handling, sanitized error storage, failed-job retry, maximum attempts, and no retry of unknown outcomes. Automatic stale-agent recovery and restart recovery remain pending."
+    blocked_by: ["T026"]
     priority: "P1"
   - task_id: "T025"
     description: "Implement agent registration, configuration, heartbeat, and job status APIs"
-    blocked_by: ["T018", "Agent credential policy decision"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/controller/AdminAgentController.java"
+          changes:
+            - change_type: "added"
+              description: "Adds ADMIN-only agent provisioning, credential rotation, and revocation endpoints."
+        - file: "backend/src/main/java/com/example/backend/controller/AgentController.java"
+          changes:
+            - change_type: "added"
+              description: "Adds public agent authentication and protected configuration/heartbeat endpoints."
+        - file: "backend/src/main/java/com/example/backend/service/agent/"
+          changes:
+            - change_type: "added"
+              description: "Adds hashed-secret authentication, short-lived JWT issuance, active-agent validation, credential administration, and printer discovery upserts."
+        - file: "backend/src/main/resources/db/migration/V2__add_printer_capabilities.sql"
+          changes:
+            - change_type: "added"
+              description: "Adds persisted color, duplex, copy-limit, and paper-size printer capabilities without altering V1."
+        - file: "backend/src/main/java/com/example/backend/config/SecurityConfiguration.java"
+          changes:
+            - change_type: "modified"
+              description: "Permits only agent bootstrap authentication publicly and restricts credential administration to ADMIN."
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn -q -f backend/pom.xml test"
+        passed: 71
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Integration tests cover provision, token lifetime, heartbeat/capability upsert, configuration, rotation, old-secret rejection, operator denial, revocation, job claims, status events, and idempotency."
     priority: "P1"
   - task_id: "T026"
     description: "Implement authenticated WebSocket notifications"
-    blocked_by: ["T025", "WebSocket security decision"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/src/main/java/com/example/backend/config/AgentWebSocketConfiguration.java"
+          changes:
+            - change_type: "added"
+              description: "Configures the STOMP endpoint, private user destination, simple broker, and inbound/outbound authorization interceptors."
+        - file: "backend/src/main/java/com/example/backend/service/agent/AgentStompAuthenticationInterceptor.java"
+          changes:
+            - change_type: "added"
+              description: "Authenticates CONNECT using the short-lived bearer JWT, validates the active agent on inbound frames, restricts subscriptions, and rejects client SEND frames."
+        - file: "backend/src/main/java/com/example/backend/service/agent/AgentStompOutboundAuthorizationInterceptor.java"
+          changes:
+            - change_type: "added"
+              description: "Suppresses outbound delivery to expired or revoked agent sessions."
+        - file: "backend/src/main/java/com/example/backend/service/agent/PrintJobNotificationPublisher.java"
+          changes:
+            - change_type: "added"
+              description: "Publishes per-agent JOB_AVAILABLE hints after queue transaction commit; REST claim remains authoritative."
+        - file: "backend/src/main/java/com/example/backend/config/SecurityConfiguration.java"
+          changes:
+            - change_type: "modified"
+              description: "Permits the HTTP WebSocket handshake; authentication is enforced on STOMP CONNECT."
+        - file: "backend/src/test/java/com/example/backend/service/agent/AgentStompAuthenticationInterceptorTest.java"
+          changes:
+            - change_type: "added"
+              description: "Tests bearer CONNECT authentication, private queue subscriptions, and denial of missing credentials/shared subscriptions."
+        - file: "backend/src/test/java/com/example/backend/service/agent/AgentStompOutboundAuthorizationInterceptorTest.java"
+          changes:
+            - change_type: "added"
+              description: "Verifies outbound messages are suppressed for revoked agents and preserved for active agents."
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn -q -f backend/pom.xml clean test"
+        passed: 75
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Full backend test suite passes, including focused inbound auth/subscription and outbound revoked-session authorization tests. Client reconnect and stale-agent/job recovery remain pending."
     priority: "P1"
   - task_id: "T027"
     description: "Document API and agent event contracts"
-    blocked_by: ["T015", "T020", "T025", "T026"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/docs/api-contract.md"
+          changes:
+            - change_type: "added"
+              description: "Defines agent provisioning/authentication, heartbeat and printer discovery, durable job claim, document download, lifecycle events, WebSocket notifications, admin retry/review, and error/status contracts."
+        - file: "apis_docs.md"
+          changes:
+            - change_type: "modified"
+              description: "Lists implemented agent REST routes and authenticated STOMP delivery separately from pending client/recovery work."
+    verification:
+      notes: "Contract documentation aligns to implemented route/status names and the selected short-lived JWT, hash-only secret, TLS, and no-auto-resubmit policies; implementation status is kept current."
+    upstream_trace:
+      plan_item: "1.7"
+      requirements: ["REQ-009", "REQ-010", "REQ-012", "REQ-014", "REQ-017"]
+      full_trace: "REQ-009,REQ-010,REQ-012,REQ-014,REQ-017 -> Phase-1.7 -> T027 -> backend/docs/api-contract.md"
     priority: "P1"
   - task_id: "T028"
     description: "Test queue serialization, recovery, retry, and authorization"
@@ -869,34 +986,218 @@ pending_tasks:
     priority: "P1"
   - task_id: "T029"
     description: "Create Print Agent Java Maven application"
-    blocked_by: ["T027", "Supported OS decision"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "print-agent/pom.xml"
+          changes:
+            - change_type: "added"
+              description: "Creates an independently buildable Java 21 Maven agent with test and executable distribution packaging."
+        - file: "print-agent/src/main/java/com/example/printagent/PrintAgentApplication.java"
+          changes:
+            - change_type: "added"
+              description: "Adds a printer-discovery CLI entry point without claiming backend integration is available."
+        - file: "print-agent/README.md"
+          changes:
+            - change_type: "added"
+              description: "Documents build, configuration, Windows/Linux printer prerequisites, and integration limitations."
+    verification:
+      test_results:
+        command: "cd print-agent && JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn test"
+        passed: 12
+        failed: 0
+        skipped: 0
+        failures: []
+      package_passed: true
+      notes: "Standalone distribution packaged; --list-printers smoke command ran. No compatible host printer was available in this environment."
     priority: "P1"
   - task_id: "T030"
     description: "Implement agent configuration, authentication, and reconnect"
-    blocked_by: ["T029"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "print-agent/src/main/java/com/example/printagent/config/AgentConfiguration.java"
+          changes:
+            - change_type: "added"
+              description: "Validates external backend URL, agent identity, secret length, working directory, and converter command; redacts secret from toString."
+        - file: "print-agent/src/main/java/com/example/printagent/config/AgentConfigurationException.java"
+          changes:
+            - change_type: "added"
+              description: "Provides explicit configuration failures."
+        - file: "print-agent/src/test/java/com/example/printagent/config/AgentConfigurationTest.java"
+          changes:
+            - change_type: "added"
+              description: "Covers TLS/local-development URL rules, required secret strength, and secret redaction."
+        - file: "print-agent/src/main/java/com/example/printagent/backend/AgentApiClient.java"
+          changes:
+            - change_type: "added"
+              description: "Implements bearer-authenticated REST calls, token bootstrap, printer heartbeat, queue claim, document download, and lifecycle event reporting."
+        - file: "print-agent/src/main/java/com/example/printagent/backend/AgentSession.java"
+          changes:
+            - change_type: "added"
+              description: "Refreshes the short-lived JWT and retries idempotent REST operations once after an authentication response."
+        - file: "print-agent/src/main/java/com/example/printagent/backend/AgentStompClient.java"
+          changes:
+            - change_type: "added"
+              description: "Connects to the documented STOMP endpoint, authenticates via CONNECT, subscribes to the private queue, and parses job hints."
+        - file: "print-agent/src/main/java/com/example/printagent/runtime/PrintAgentRuntime.java"
+          changes:
+            - change_type: "added"
+              description: "Runs heartbeat, WebSocket reconnect with backoff, notification-prioritized claiming, five-second REST polling fallback, backend-configured download limits, and assigned-printer refresh."
+        - file: "print-agent/src/main/java/com/example/printagent/PrintAgentApplication.java"
+          changes:
+            - change_type: "modified"
+              description: "Starts the connected agent by default and retains --list-printers as a discovery smoke command."
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn -q -f print-agent/pom.xml clean package"
+        passed: 27
+        failed: 0
+        skipped: 0
+        failures: []
+      package_passed: true
+      notes: "REST authentication/refresh, heartbeat, STOMP reconnect, polling fallback, configured download limit, and refreshed printer assignments are covered by the standalone suite; live backend acceptance remains outstanding."
+    blocked_by: ["T025", "T026", "T027"]
     priority: "P1"
   - task_id: "T031"
     description: "Implement host printer discovery"
-    blocked_by: ["T029", "Supported OS decision"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "print-agent/src/main/java/com/example/printagent/printer/PrinterDescriptor.java"
+          changes:
+            - change_type: "added"
+              description: "Represents host printer identity and exposed capabilities."
+        - file: "print-agent/src/main/java/com/example/printagent/printer/PrintServiceProvider.java"
+          changes:
+            - change_type: "added"
+              description: "Defines an injectable host printer provider."
+        - file: "print-agent/src/main/java/com/example/printagent/printer/HostPrintServiceProvider.java"
+          changes:
+            - change_type: "added"
+              description: "Discovers Pageable-compatible Java Print Services."
+        - file: "print-agent/src/main/java/com/example/printagent/printer/PrinterDiscovery.java"
+          changes:
+            - change_type: "modified"
+              description: "Reports only backend-supported paper names and caps discovered copy capability to the backend limit."
+    verification:
+      test_results:
+        command: "cd print-agent && JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn test"
+        passed: 4
+        failed: 0
+        skipped: 0
+        failures: []
     priority: "P1"
   - task_id: "T032"
     description: "Test printer discovery through an injectable provider"
+    status: "completed"
+    verification:
+      test_results:
+        command: "cd print-agent && JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn test"
+        passed: 4
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Verifies sorted discovery output and filtering of services that do not support pageable documents."
     blocked_by: ["T031"]
     priority: "P1"
   - task_id: "T033"
     description: "Implement agent job notification and secure download"
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "print-agent/src/main/java/com/example/printagent/backend/AgentApiClient.java"
+          changes:
+            - change_type: "added"
+              description: "Downloads assigned documents with bearer authentication, exact MIME matching, bounded streaming, owner-only local permissions, and cleanup on failure."
+        - file: "print-agent/src/main/java/com/example/printagent/backend/AgentStompClient.java"
+          changes:
+            - change_type: "added"
+              description: "Consumes authenticated STOMP JOB_AVAILABLE notifications and validates their event type and printer routing identity."
+        - file: "print-agent/src/test/java/com/example/printagent/backend/AgentApiClientTest.java"
+          changes:
+            - change_type: "added"
+              description: "Exercises authentication payloads, heartbeat/claim contracts, safe errors, and bounded document downloads against a local HTTP server."
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn -q -f print-agent/pom.xml clean package"
+        passed: 27
+        failed: 0
+        skipped: 0
+        failures: []
     blocked_by: ["T027", "T030"]
     priority: "P1"
   - task_id: "T034"
     description: "Implement OS print adapter"
-    blocked_by: ["T033", "Supported OS/printer decision"]
+    status: "partial"
+    implementation:
+      files_changed:
+        - file: "print-agent/src/main/java/com/example/printagent/printing/DefaultPrintDocumentPreparer.java"
+          changes:
+            - change_type: "added"
+              description: "Prepares PDF, DOCX, JPEG, and PNG documents and cleans temporary conversion files."
+        - file: "print-agent/src/main/java/com/example/printagent/printing/OsPrintServiceExecutor.java"
+          changes:
+            - change_type: "added"
+              description: "Validates printer capabilities and submits documents to Java Print Service with bounded acknowledgement handling."
+        - file: "print-agent/src/main/java/com/example/printagent/printing/PrintJobRequestValidator.java"
+          changes:
+            - change_type: "added"
+              description: "Rejects unsupported, malformed, oversized, missing, or symbolic-link document requests."
+        - file: "print-agent/src/test/java/com/example/printagent/printing/OsPrintServiceExecutorTest.java"
+          changes:
+            - change_type: "added"
+              description: "Uses a fake PrintService to verify completion, unknown acknowledgement, and unsupported-option rejection without hardware."
+        - file: "print-agent/src/test/java/com/example/printagent/printing/PrintJobRequestValidatorTest.java"
+          changes:
+            - change_type: "added"
+              description: "Covers document format/size/identity validation and symlink rejection."
+    verification:
+      test_results:
+        command: "cd print-agent && JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn test"
+        passed: 6
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "OS adapter is wired to backend-delivered jobs and fake-printer tested. No physical printer is available for acceptance testing."
+    blocked_by: ["T033"]
     priority: "P1"
   - task_id: "T035"
     description: "Implement status reporting and safe recovery"
-    blocked_by: ["T033", "T034", "Retry policy decision"]
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "print-agent/src/main/java/com/example/printagent/runtime/AgentExecutionJournal.java"
+          changes:
+            - change_type: "added"
+              description: "Persists job state and pending event IDs atomically with owner-only permissions for reconnect-safe idempotent replay."
+        - file: "print-agent/src/main/java/com/example/printagent/runtime/AgentInstanceLock.java"
+          changes:
+            - change_type: "added"
+              description: "Prevents multiple agent processes from sharing the same work directory and execution journal."
+        - file: "print-agent/src/main/java/com/example/printagent/runtime/AgentJobProcessor.java"
+          changes:
+            - change_type: "added"
+              description: "Waits for PRINTING acknowledgement before OS submission and reports OUTCOME_UNKNOWN after possible submission/restart instead of retrying."
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn -q -f print-agent/pom.xml clean package"
+        passed: 27
+        failed: 0
+        skipped: 0
+        failures: []
     priority: "P1"
   - task_id: "T036"
     description: "Test fake-printer execution and recovery"
+    status: "partial"
+    verification:
+      test_results:
+        command: "JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH mvn -q -f print-agent/pom.xml clean package"
+        passed: 27
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Fake-printer completion, REST/STOMP contracts, token refresh, event replay, restart uncertainty, and single-instance locking pass; live backend and hardware acceptance remain."
     blocked_by: ["T033", "T034", "T035"]
     priority: "P1"
   - task_id: "T037"

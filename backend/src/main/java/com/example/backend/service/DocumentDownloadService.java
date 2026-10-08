@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.example.backend.entity.DocumentEntity;
 import com.example.backend.repository.DocumentRepository;
 import com.example.backend.repository.PrintJobRepository;
+import com.example.backend.service.agent.AgentTokenValidator;
 import com.example.backend.service.document.DocumentNotFoundException;
 import com.example.backend.service.document.DocumentStorageException;
 import com.example.backend.storage.DocumentStorage;
@@ -21,14 +22,17 @@ public class DocumentDownloadService {
     private final DocumentRepository documentRepository;
     private final PrintJobRepository printJobRepository;
     private final DocumentStorage documentStorage;
+    private final AgentTokenValidator agentTokenValidator;
 
     public DocumentDownloadService(
             DocumentRepository documentRepository,
             PrintJobRepository printJobRepository,
-            DocumentStorage documentStorage) {
+            DocumentStorage documentStorage,
+            AgentTokenValidator agentTokenValidator) {
         this.documentRepository = documentRepository;
         this.printJobRepository = printJobRepository;
         this.documentStorage = documentStorage;
+        this.agentTokenValidator = agentTokenValidator;
     }
 
     public DocumentDownload download(UUID documentId, Authentication authentication) {
@@ -42,6 +46,10 @@ public class DocumentDownloadService {
             return openDocument(documentId);
         }
         if (hasAuthority(authentication, "ROLE_AGENT")) {
+            if (!(authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt token)) {
+                throw new AccessDeniedException("The agent token is invalid.");
+            }
+            agentTokenValidator.requireActiveAgent(token);
             if (!printJobRepository.existsByPrintOrder_Document_IdAndAgent_AgentCode(
                     documentId,
                     authentication.getName())) {

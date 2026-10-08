@@ -91,6 +91,7 @@ public class AdminPrintOrderService {
                 printRequested + queued + printing,
                 orderRepository.countByStatus(PrintOrderStatus.PRINTED),
                 orderRepository.countByStatus(PrintOrderStatus.FAILED),
+                orderRepository.countByStatus(PrintOrderStatus.OUTCOME_UNKNOWN),
                 orderRepository.countByStatus(PrintOrderStatus.CANCELLED));
     }
 
@@ -176,6 +177,7 @@ public class AdminPrintOrderService {
                 job.getId(),
                 job.getAttemptNumber(),
                 job.getStatus(),
+                job.getErrorCode(),
                 job.getErrorMessage(),
                 job.getQueuedAt(),
                 job.getStartedAt(),

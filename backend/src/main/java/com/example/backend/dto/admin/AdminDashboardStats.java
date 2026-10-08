@@ -6,5 +6,6 @@ public record AdminDashboardStats(
         long inProgressOrders,
         long printedOrders,
         long failedOrders,
+        long outcomeUnknownOrders,
         long cancelledOrders) {
 }

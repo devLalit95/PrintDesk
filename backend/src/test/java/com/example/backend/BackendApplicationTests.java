@@ -13,6 +13,15 @@ import java.util.stream.Stream;
 import com.example.backend.dto.order.CreatePrintOrderRequest;
 import com.example.backend.dto.order.PriceEstimateRequest;
 import com.example.backend.dto.admin.AdminLoginRequest;
+import com.example.backend.dto.admin.AdminPrintRequest;
+import com.example.backend.dto.admin.AdminUnknownOutcomeRequest;
+import com.example.backend.dto.agent.AgentCredentialsRequest;
+import com.example.backend.dto.agent.AgentCredentialRotationRequest;
+import com.example.backend.dto.agent.AgentClaimRequest;
+import com.example.backend.dto.agent.AgentJobEventRequest;
+import com.example.backend.dto.agent.AgentHeartbeatRequest;
+import com.example.backend.dto.agent.AgentPrinterCapabilitiesRequest;
+import com.example.backend.dto.agent.AgentPrinterRegistration;
 import com.example.backend.entity.AdminAccountEntity;
 import com.example.backend.entity.AdminRole;
 import com.example.backend.entity.AuditLogEntity;
@@ -214,7 +223,9 @@ class BackendApplicationTests {
 
 	@Test
 	void appliesCoreSchemaMigration() {
-		org.junit.jupiter.api.Assertions.assertEquals(1, flyway.info().applied().length);
+		org.junit.jupiter.api.Assertions.assertEquals(3, flyway.info().applied().length);
+		org.junit.jupiter.api.Assertions.assertTrue(java.util.Arrays.stream(flyway.info().applied())
+				.anyMatch(migration -> migration.getVersion().getVersion().equals("2")));
 	}
 
 	@Test
@@ -480,7 +491,7 @@ class BackendApplicationTests {
 
 		mockMvc.perform(MockMvcRequestBuilders.get("/api/documents/{documentId}", documentId)
 						.with(SecurityMockMvcRequestPostProcessors.user("assigned-agent").roles("AGENT")))
-				.andExpect(MockMvcResultMatchers.status().isNotFound());
+				.andExpect(MockMvcResultMatchers.status().isForbidden());
 
 		MvcResult adminDownload = mockMvc.perform(MockMvcRequestBuilders.get(
 								"/api/documents/{documentId}", documentId)
@@ -491,5 +502,377 @@ class BackendApplicationTests {
 				.andExpect(MockMvcResultMatchers.status().isOk())
 				.andExpect(MockMvcResultMatchers.content().contentType(MediaType.APPLICATION_PDF))
 				.andExpect(MockMvcResultMatchers.content().bytes(pdfBytes));
+	}
+
+	@Test
+	void provisionsAuthenticatesRotatesRevokesAndHeartbeatsAgents() throws Exception {
+		String agentCode = "agent-" + UUID.randomUUID();
+		String secret = "agent-secret-value-that-is-at-least-32-bytes";
+		String rotatedSecret = "rotated-agent-secret-value-that-is-32-bytes";
+		var adminAuth = jwt()
+				.jwt(token -> token.subject(UUID.randomUUID().toString()))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+		var operatorAuth = jwt()
+				.jwt(token -> token.subject(UUID.randomUUID().toString()))
+				.authorities(new SimpleGrantedAuthority("ROLE_OPERATOR"));
+
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/admin/agents")
+						.with(operatorAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(
+								new AgentCredentialsRequest(agentCode, secret))))
+				.andExpect(MockMvcResultMatchers.status().isForbidden());
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/agents/me/config"))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized());
+
+		MvcResult provision = mockMvc.perform(MockMvcRequestBuilders.post("/api/admin/agents")
+						.with(adminAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(
+								new AgentCredentialsRequest(agentCode, secret))))
+				.andExpect(MockMvcResultMatchers.status().isCreated())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.agentCode").value(agentCode))
+				.andExpect(MockMvcResultMatchers.jsonPath("$.status").value("OFFLINE"))
+				.andReturn();
+		org.junit.jupiter.api.Assertions.assertFalse(
+				provision.getResponse().getContentAsString().contains(secret));
+
+		MvcResult login = mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/authenticate")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentCredentialsRequest(agentCode, secret))))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.tokenType").value("Bearer"))
+				.andReturn();
+		var loginBody = objectMapper.readTree(login.getResponse().getContentAsByteArray());
+		String agentToken = loginBody.get("accessToken").stringValue();
+		String agentId = loginBody.get("agentId").stringValue();
+		org.junit.jupiter.api.Assertions.assertEquals(
+				Duration.ofMinutes(5),
+				Duration.between(
+						jwtDecoder.decode(agentToken).getIssuedAt(),
+						jwtDecoder.decode(agentToken).getExpiresAt()));
+
+		AgentHeartbeatRequest heartbeat = new AgentHeartbeatRequest(
+				Instant.now(),
+				java.util.List.of(new AgentPrinterRegistration(
+						"Office_Printer",
+						"Office Printer",
+						new AgentPrinterCapabilitiesRequest(
+								true, true, 50, java.util.List.of("A4", "Letter")))));
+		MvcResult heartbeatResponse = mockMvc.perform(MockMvcRequestBuilders.put("/api/agents/me/heartbeat")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(heartbeat)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.agentStatus").value("ONLINE"))
+				.andExpect(MockMvcResultMatchers.jsonPath("$.printers[0].capabilities.color").value(true))
+				.andReturn();
+		String printerId = objectMapper.readTree(heartbeatResponse.getResponse().getContentAsByteArray())
+				.get("printers").get(0).get("printerId").stringValue();
+		mockMvc.perform(MockMvcRequestBuilders.get("/api/agents/me/config")
+						.header("Authorization", "Bearer " + agentToken))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.heartbeatIntervalSeconds").value(30));
+
+		mockMvc.perform(MockMvcRequestBuilders.put("/api/admin/agents/{agentCode}/credential", agentCode)
+						.with(adminAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentCredentialRotationRequest(rotatedSecret))))
+				.andExpect(MockMvcResultMatchers.status().isNoContent());
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/authenticate")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentCredentialsRequest(agentCode, secret))))
+				.andExpect(MockMvcResultMatchers.status().isUnauthorized())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value("INVALID_AGENT_CREDENTIALS"));
+
+		MvcResult rotatedLogin = mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/authenticate")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(
+								new AgentCredentialsRequest(agentCode, rotatedSecret))))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andReturn();
+		String rotatedToken = objectMapper.readTree(rotatedLogin.getResponse().getContentAsByteArray())
+				.get("accessToken").stringValue();
+
+		mockMvc.perform(MockMvcRequestBuilders.delete("/api/admin/agents/{agentCode}", agentCode)
+						.with(adminAuth))
+				.andExpect(MockMvcResultMatchers.status().isNoContent());
+		mockMvc.perform(MockMvcRequestBuilders.put("/api/agents/me/heartbeat")
+						.header("Authorization", "Bearer " + rotatedToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(heartbeat)))
+				.andExpect(MockMvcResultMatchers.status().isForbidden());
+		org.junit.jupiter.api.Assertions.assertNotNull(printerId);
+		org.junit.jupiter.api.Assertions.assertNotNull(agentId);
+	}
+
+	@Test
+	void queuesClaimsSeriallyAndRequiresReviewBeforeRetryingUnknownPrints() throws Exception {
+		PrintRateEntity rate = printRateRepository.findAll().stream()
+				.filter(existing -> existing.getPrintType() == PrintType.BLACK_AND_WHITE)
+				.findFirst()
+				.orElseGet(() -> new PrintRateEntity(
+						PrintType.BLACK_AND_WHITE, new java.math.BigDecimal("1.25"), "INR"));
+		rate.updateRate(new java.math.BigDecimal("1.25"), "INR", true);
+		printRateRepository.save(rate);
+
+		String agentCode = "queue-agent-" + UUID.randomUUID();
+		String secret = "queue-agent-secret-with-at-least-32-bytes";
+		var adminAuth = jwt()
+				.jwt(token -> token.subject(UUID.randomUUID().toString()))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+		var operatorAuth = jwt()
+				.jwt(token -> token.subject(UUID.randomUUID().toString()))
+				.authorities(new SimpleGrantedAuthority("ROLE_OPERATOR"));
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/admin/agents")
+						.with(adminAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(
+								new AgentCredentialsRequest(agentCode, secret))))
+				.andExpect(MockMvcResultMatchers.status().isCreated());
+		MvcResult login = mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/authenticate")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentCredentialsRequest(agentCode, secret))))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andReturn();
+		String agentToken = objectMapper.readTree(login.getResponse().getContentAsByteArray())
+				.get("accessToken").stringValue();
+		AgentHeartbeatRequest heartbeat = new AgentHeartbeatRequest(
+				Instant.now(),
+				java.util.List.of(new AgentPrinterRegistration(
+						"Queue_Printer",
+						"Queue Printer",
+						new AgentPrinterCapabilitiesRequest(
+								true, true, 50, java.util.List.of("A4", "Letter")))));
+		MvcResult heartbeatResult = mockMvc.perform(MockMvcRequestBuilders.put("/api/agents/me/heartbeat")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(heartbeat)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andReturn();
+		String printerId = objectMapper.readTree(heartbeatResult.getResponse().getContentAsByteArray())
+				.get("printers").get(0).get("printerId").stringValue();
+
+		UUID firstOrderId = createPendingOrder("queue-first");
+		UUID secondOrderId = createPendingOrder("queue-second");
+		MvcResult firstQueued = mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-orders/{orderId}/print", firstOrderId)
+						.with(adminAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AdminPrintRequest(UUID.fromString(printerId)))))
+				.andExpect(MockMvcResultMatchers.status().isAccepted())
+				.andReturn();
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-orders/{orderId}/print", secondOrderId)
+						.with(adminAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AdminPrintRequest(UUID.fromString(printerId)))))
+				.andExpect(MockMvcResultMatchers.status().isAccepted());
+		String firstJobId = objectMapper.readTree(firstQueued.getResponse().getContentAsByteArray())
+				.get("jobId").stringValue();
+
+		AgentClaimRequest claim = new AgentClaimRequest(UUID.fromString(printerId));
+		MvcResult claimed = mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/jobs/claim")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(claim)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.jobId").value(firstJobId))
+				.andExpect(MockMvcResultMatchers.jsonPath("$.status").value("CLAIMED"))
+				.andReturn();
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/jobs/claim")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(claim)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.jobId").value(firstJobId));
+		Instant startTime = Instant.now();
+		UUID startEventId = UUID.randomUUID();
+		AgentJobEventRequest starting = new AgentJobEventRequest(
+				startEventId, com.example.backend.entity.PrintJobStatus.PRINTING, startTime, null, null);
+		String claimedJobId = objectMapper.readTree(claimed.getResponse().getContentAsByteArray())
+				.get("jobId").stringValue();
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", claimedJobId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(starting)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.status").value("PRINTING"));
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/jobs/claim")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(claim)))
+				.andExpect(MockMvcResultMatchers.status().isNoContent());
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", claimedJobId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(starting)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.duplicate").value(true));
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", claimedJobId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentJobEventRequest(
+								startEventId,
+								com.example.backend.entity.PrintJobStatus.PRINTING,
+								startTime.plusSeconds(1),
+								null,
+								null))))
+				.andExpect(MockMvcResultMatchers.status().isConflict())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", claimedJobId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentJobEventRequest(
+								UUID.randomUUID(),
+								com.example.backend.entity.PrintJobStatus.PRINTED,
+								Instant.now(),
+								null,
+								null))))
+				.andExpect(MockMvcResultMatchers.status().isOk());
+
+		MvcResult secondClaim = mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/jobs/claim")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(claim)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.orderId").value(secondOrderId.toString()))
+				.andReturn();
+		String secondJobId = objectMapper.readTree(secondClaim.getResponse().getContentAsByteArray())
+				.get("jobId").stringValue();
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", secondJobId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentJobEventRequest(
+								UUID.randomUUID(),
+								com.example.backend.entity.PrintJobStatus.PRINTING,
+								Instant.now(),
+								null,
+								null))))
+				.andExpect(MockMvcResultMatchers.status().isOk());
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", secondJobId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentJobEventRequest(
+								UUID.randomUUID(),
+								com.example.backend.entity.PrintJobStatus.OUTCOME_UNKNOWN,
+								Instant.now(),
+								"OS_ACK_LOST",
+								"Printer acknowledgement missing at /tmp/secret-document.pdf"))))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.status").value("OUTCOME_UNKNOWN"));
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/admin/print-jobs/{jobId}/retry", secondJobId)
+						.with(adminAuth))
+				.andExpect(MockMvcResultMatchers.status().isConflict());
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-jobs/{jobId}/resolve-unknown", secondJobId)
+						.with(operatorAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AdminUnknownOutcomeRequest(
+								AdminUnknownOutcomeRequest.Decision.CONFIRMED_FAILED,
+								"Reviewed physical printer"))))
+				.andExpect(MockMvcResultMatchers.status().isForbidden());
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-jobs/{jobId}/resolve-unknown", secondJobId)
+						.with(adminAuth)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AdminUnknownOutcomeRequest(
+								AdminUnknownOutcomeRequest.Decision.CONFIRMED_FAILED,
+								"Reviewed physical printer"))))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.status").value("FAILED"));
+
+		MvcResult retryTwo = mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-jobs/{jobId}/retry", secondJobId)
+						.with(adminAuth))
+				.andExpect(MockMvcResultMatchers.status().isAccepted())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.attemptNumber").value(2))
+				.andReturn();
+		String retryTwoJobId = objectMapper.readTree(retryTwo.getResponse().getContentAsByteArray())
+				.get("jobId").stringValue();
+		MvcResult retryTwoClaim = mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/jobs/claim")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(claim)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.jobId").value(retryTwoJobId))
+				.andReturn();
+		String retryTwoClaimedId = objectMapper.readTree(retryTwoClaim.getResponse().getContentAsByteArray())
+				.get("jobId").stringValue();
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", retryTwoClaimedId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentJobEventRequest(
+								UUID.randomUUID(),
+								com.example.backend.entity.PrintJobStatus.FAILED,
+								Instant.now(),
+								"PRINTER_ERROR",
+								"Paper jam at /tmp/private.pdf"))))
+				.andExpect(MockMvcResultMatchers.status().isOk());
+		MvcResult retryThree = mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-jobs/{jobId}/retry", retryTwoClaimedId)
+						.with(adminAuth))
+				.andExpect(MockMvcResultMatchers.status().isAccepted())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.attemptNumber").value(3))
+				.andReturn();
+		String retryThreeJobId = objectMapper.readTree(retryThree.getResponse().getContentAsByteArray())
+				.get("jobId").stringValue();
+		MvcResult retryThreeClaim = mockMvc.perform(MockMvcRequestBuilders.post("/api/agents/jobs/claim")
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(claim)))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andExpect(MockMvcResultMatchers.jsonPath("$.jobId").value(retryThreeJobId))
+				.andReturn();
+		String retryThreeClaimedId = objectMapper.readTree(retryThreeClaim.getResponse().getContentAsByteArray())
+				.get("jobId").stringValue();
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/agents/jobs/{jobId}/events", retryThreeClaimedId)
+						.header("Authorization", "Bearer " + agentToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsBytes(new AgentJobEventRequest(
+								UUID.randomUUID(),
+								com.example.backend.entity.PrintJobStatus.FAILED,
+								Instant.now(),
+								"PRINTER_ERROR",
+								"Paper jam"))))
+				.andExpect(MockMvcResultMatchers.status().isOk());
+		mockMvc.perform(MockMvcRequestBuilders.post(
+								"/api/admin/print-jobs/{jobId}/retry", retryThreeClaimedId)
+						.with(adminAuth))
+				.andExpect(MockMvcResultMatchers.status().isConflict());
+
+		MvcResult orderDetail = mockMvc.perform(MockMvcRequestBuilders.get(
+								"/api/admin/print-orders/{orderId}", secondOrderId)
+						.with(adminAuth))
+				.andExpect(MockMvcResultMatchers.status().isOk())
+				.andReturn();
+		org.junit.jupiter.api.Assertions.assertFalse(
+				objectMapper.readTree(orderDetail.getResponse().getContentAsByteArray()).toString().contains("/tmp/"));
+	}
+
+	private UUID createPendingOrder(String fileNamePrefix) {
+		DocumentEntity document = documentRepository.save(new DocumentEntity(
+				fileNamePrefix + "-" + UUID.randomUUID() + ".pdf",
+				fileNamePrefix + "-" + UUID.randomUUID(),
+				"application/pdf",
+				42,
+				1,
+				"e".repeat(64)));
+		var created = printOrderService.createOrder(new CreatePrintOrderRequest(
+				document.getId(),
+				PrintType.BLACK_AND_WHITE,
+				1,
+				"A4",
+				"portrait",
+				false));
+		return printOrderRepository.findByToken(created.token()).orElseThrow().getId();
 	}
 }

@@ -45,6 +45,18 @@ public class PrinterEntity extends BaseEntity {
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
+    @Column(name = "supports_color", nullable = false)
+    private boolean supportsColor;
+
+    @Column(name = "supports_duplex", nullable = false)
+    private boolean supportsDuplex;
+
+    @Column(name = "max_copies", nullable = false)
+    private int maxCopies = 1;
+
+    @Column(name = "paper_sizes", nullable = false, length = 512)
+    private String paperSizes = "A4";
+
     @Column(name = "last_discovered_at")
     private Instant lastDiscoveredAt;
 
@@ -61,6 +73,20 @@ public class PrinterEntity extends BaseEntity {
     public void updateDiscovery(String displayName, Instant discoveredAt) {
         this.displayName = displayName;
         this.lastDiscoveredAt = discoveredAt;
+    }
+
+    public void updateDiscovery(
+            String displayName,
+            boolean supportsColor,
+            boolean supportsDuplex,
+            int maxCopies,
+            String paperSizes,
+            Instant discoveredAt) {
+        updateDiscovery(displayName, discoveredAt);
+        this.supportsColor = supportsColor;
+        this.supportsDuplex = supportsDuplex;
+        this.maxCopies = maxCopies;
+        this.paperSizes = paperSizes;
     }
 
     public void setDefaultPrinter(boolean defaultPrinter) {

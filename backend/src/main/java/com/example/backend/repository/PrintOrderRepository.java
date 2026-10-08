@@ -11,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 
 public interface PrintOrderRepository extends JpaRepository<PrintOrderEntity, UUID> {
 
@@ -35,6 +37,11 @@ public interface PrintOrderRepository extends JpaRepository<PrintOrderEntity, UU
 
     @EntityGraph(attributePaths = "document")
     Optional<PrintOrderEntity> findWithDocumentById(UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "document")
+    @Query("select o from PrintOrderEntity o where o.id = :id")
+    Optional<PrintOrderEntity> findWithDocumentByIdForUpdate(@Param("id") UUID id);
 
     Page<PrintOrderEntity> findAllByStatusOrderByCreatedAtDesc(
             PrintOrderStatus status,

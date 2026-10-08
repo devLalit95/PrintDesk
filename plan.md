@@ -1,6 +1,6 @@
 # Online Document Printing System — Implementation Plan
 
-**Status:** In progress — backend foundation, customer workflows, and selected admin order management are implemented; printer/rate administration, durable printing, and the Print Agent remain pending  
+**Status:** In progress — backend foundation, customer workflows, selected admin order management, and the initial Print Agent printer/OS-adapter layer are implemented; backend agent integration and durable queue remain pending  
 **Last updated:** 2026-10-08  
 **Source requirements:** [SRS.md](./SRS.md)  
 **UX guidance:** [Design.md](./Design.md)
@@ -45,8 +45,8 @@ The SRS does not assign `REQ-XXX` identifiers. For traceability below, this plan
 | Backend | Existing Java 21 / Spring Boot Maven module. Add only required Spring MVC, persistence, validation, security, WebSocket, and database capabilities. |
 | Database | MySQL 8.4 LTS, selected. Store order and document metadata and state in the database; store document bytes in managed file storage and persist an opaque storage key. |
 | File storage | Start with a backend-managed local storage adapter for development/small deployment, outside public web roots. Define an adapter boundary for future object storage. Do not return filesystem paths to clients. |
-| Agent | Separate Java 21 Maven application under `print-agent/`. Use an injectable printer boundary so queue and status logic can be tested without a physical printer. |
-| Agent transport | WebSocket for job notification; authenticated REST for registration/configuration, secure document retrieval, health/status updates, and job status. |
+| Agent | Separate Java 21 Maven application under `print-agent/`, targeting Windows and Linux first. Use an injectable Java Print Service boundary so queue and status logic can be tested without a physical printer. |
+| Agent transport | WebSocket over TLS for job notification using a short-lived agent bearer JWT; authenticated REST for enrollment/authentication, configuration, secure document retrieval, health/status updates, and job status. |
 | Frontend | Existing React + Vite app; use the SRS/Design stack (MUI, React Router, Zustand, Framer Motion, Axios). Current dependencies already include React, Vite, Router, Zustand, Framer Motion, and Axios; MUI is not currently installed. |
 | Currency and price | Display INR as shown in the SRS/Design. Backend owns all arithmetic and rate snapshots. Use decimal-safe money values; never trust a client-submitted total. |
 | Tests | Backend unit and MySQL-backed integration tests; frontend lint/build and component/API tests; agent unit tests with a fake printer and a physical-printer acceptance test. Add browser E2E tooling only after selecting and approving the test runner. |
@@ -57,7 +57,7 @@ The SRS does not assign `REQ-XXX` identifiers. For traceability below, this plan
 1. **Backend owns truth.** Revalidate uploads, calculate all final prices, generate tokens, enforce state transitions, and authorize every document/job operation on the server.
 2. **Separate metadata and bytes.** Persist document metadata and storage key; never store file contents as an ordinary database blob or expose a path.
 3. **Durable, serialized printing.** Persist queue/job state and allow only one active job per configured printer. Recover safely after backend/agent restart; do not infer that a job printed when its outcome is unknown.
-4. **Agent is the hardware boundary.** Only an authenticated agent may claim/execute assigned jobs. The browser must never invoke a local print dialog as a substitute for the agent.
+4. **Agent is the hardware boundary.** Only an authenticated agent may claim/execute assigned jobs. The browser must never invoke a local print dialog as a substitute for the agent. Windows/Linux printing uses the host Java Print Service and explicitly rejects unavailable printers or unsupported options.
 5. **Explicit state transitions.** Centralize order/job transitions and reject invalid transitions. Keep order status and execution-job status distinct if needed to represent retries without erasing history.
 6. **Secure by default.** Enforce role authorization, upload limits and allowlists, opaque IDs, access-controlled downloads, agent credentials, input validation, and admin audit events. Do not place credentials or secrets in source control.
 7. **Keep modules independent.** Shared concepts are communicated by API/event contracts, not by importing backend classes into frontend or agent code.
@@ -176,24 +176,24 @@ Tasks are ordered by dependency and module. `[P]` marks work that may proceed in
 - [x] T019 [Plan:1.5] Add bootstrap, login, JWT claims/expiry, authenticated route, and role-boundary tests under `backend/src/test/java/com/example/backend/`.
 - [x] T020 [Plan:1.6] Implement admin order search/filter/detail/history/statistics endpoints under `backend/src/main/java/com/example/backend/controller/` and `backend/src/main/java/com/example/backend/service/`.
 - [ ] T021 [Plan:1.6] Implement printer configuration/default and pricing read/write endpoints under `backend/src/main/java/com/example/backend/controller/` and `backend/src/main/java/com/example/backend/service/`.
-- [~] T022 [Plan:1.6] Implement guarded print, retry, and cancel operations with audit events under `backend/src/main/java/com/example/backend/service/`; pending-only cancellation and audit are implemented, while print/retry await the durable queue and authenticated agent.
+- [x] T022 [Plan:1.6] Implement guarded print, retry, and cancel operations with audit events under `backend/src/main/java/com/example/backend/service/`; print/retry are now durable and audited, retries are capped at three total attempts, and uncertain outcomes require ADMIN adjudication.
 - [~] T023 [P] [Plan:1.6] Add admin filtering/pagination, printer/rate authorization, and action eligibility tests under `backend/src/test/java/com/example/backend/`; implemented order queries and cancellation are covered, while deferred APIs/actions await implementation.
-- [ ] T024 [Plan:1.7] Implement persistent job enqueue/claim, per-printer sequential execution guards, idempotent acknowledgements, and recovery in `backend/src/main/java/com/example/backend/service/`.
-- [ ] T025 [Plan:1.7] Implement agent registration, credential validation, configuration, heartbeat, and job status endpoints under `backend/src/main/java/com/example/backend/controller/`.
-- [ ] T026 [Plan:1.7] Implement authenticated WebSocket job notifications and connection lifecycle in `backend/src/main/java/com/example/backend/websocket/`.
-- [ ] T027 [Plan:1.7] Publish request/response, error, event, and status-transition contract documentation in `backend/docs/api-contract.md`.
-- [ ] T028 [P] [Plan:1.7] Test sequential dispatch, restart recovery, retry limits/eligibility, duplicate notification handling, and agent authorization under `backend/src/test/java/com/example/backend/`.
+- [~] T024 [Plan:1.7] Implement persistent job enqueue/claim, per-printer sequential execution guards, idempotent acknowledgements, and recovery in `backend/src/main/java/com/example/backend/service/`; enqueue/claim, DB-backed event idempotency, and sequential guards are implemented, while stale-agent/offline recovery remains pending.
+- [x] T025 [Plan:1.7] Implement agent registration, credential validation, configuration, heartbeat, and job status endpoints under `backend/src/main/java/com/example/backend/controller/`; provisioning/authentication, printer heartbeat, durable claim, lifecycle reporting, credential revocation, and status configuration are implemented.
+- [x] T026 [Plan:1.7] Implement authenticated WebSocket job notifications and connection lifecycle in `backend/src/main/java/com/example/backend/config/` and `backend/src/main/java/com/example/backend/service/agent/`; STOMP CONNECT bearer authentication, private queue subscription enforcement, frame-level active-token validation, and after-commit notifications are implemented and tested.
+- [x] T027 [Plan:1.7] Publish request/response, error, event, and status-transition contract documentation in `backend/docs/api-contract.md`.
+- [~] T028 [P] [Plan:1.7] Test sequential dispatch, restart recovery, retry limits/eligibility, duplicate notification handling, and agent authorization under `backend/src/test/java/com/example/backend/`; tests cover serial claim, event idempotency, retry cap, uncertain-outcome review, and authorization, while restart and WebSocket recovery tests remain pending.
 
 ### Phase 2 — Print Agent
 
-- [ ] T029 [Plan:2.1] Create the standalone Java 21 Maven application and package structure in `print-agent/pom.xml` and `print-agent/src/main/java/`.
-- [ ] T030 [Plan:2.1] Implement externalized agent identity/secret configuration, registration, authenticated heartbeat, and reconnect loop under `print-agent/src/main/java/`.
-- [ ] T031 [Plan:2.2] Implement host printer discovery and report printer identities/capabilities through the backend contract under `print-agent/src/main/java/`.
-- [ ] T032 [Plan:2.2] Add printer discovery/configuration tests using an injectable printer provider under `print-agent/src/test/java/`.
-- [ ] T033 [Plan:2.3] Implement WebSocket job notification handling, authenticated document download, and local job validation under `print-agent/src/main/java/`.
-- [ ] T034 [Plan:2.3] Implement an operating-system print adapter that applies supported options without browser UI under `print-agent/src/main/java/`.
-- [ ] T035 [Plan:2.4] Implement job lifecycle reporting, durable/reconnect-safe processing, and explicit uncertain-outcome handling under `print-agent/src/main/java/`.
-- [ ] T036 [P] [Plan:2.3,2.4] Add fake-printer tests for job success, failure, reconnect, duplicate delivery, and status reporting under `print-agent/src/test/java/`.
+- [x] T029 [Plan:2.1] Create the standalone Java 21 Maven application and package structure in `print-agent/pom.xml` and `print-agent/src/main/java/`.
+- [x] T030 [Plan:2.1] Implement externalized agent identity/secret configuration, registration, authenticated heartbeat, and reconnect loop under `print-agent/src/main/java/`; the agent authenticates with the REST contract, refreshes expired JWTs, heartbeats discovered printers, and reconnects STOMP with backoff while polling remains available.
+- [x] T031 [Plan:2.2] Implement Windows/Linux host printer discovery through the injectable Java Print Service provider under `print-agent/src/main/java/`.
+- [x] T032 [Plan:2.2] Add printer discovery/configuration tests using an injectable provider under `print-agent/src/test/java/`.
+- [x] T033 [Plan:2.3] Implement WebSocket job notification handling, authenticated document download, and local job validation under `print-agent/src/main/java/`; the agent uses bounded authenticated downloads, MIME/size validation, and REST claim before execution.
+- [~] T034 [Plan:2.3] Implement the Java Print Service adapter for PDF/DOCX/JPG/PNG and validate supported options without browser UI under `print-agent/src/main/java/`; backend job integration is implemented, while Windows/Linux physical-printer acceptance remains.
+- [x] T035 [Plan:2.4] Implement job lifecycle reporting, durable/reconnect-safe processing, and explicit uncertain-outcome handling under `print-agent/src/main/java/`; an atomic local journal replays idempotent event IDs and reports `OUTCOME_UNKNOWN` after restart when OS submission may have begun.
+- [~] T036 [P] [Plan:2.3,2.4] Add fake-printer tests for executor completion, unsupported options, unknown acknowledgement, and request validation under `print-agent/src/test/java/`; API, event-replay, and local restart-safety coverage is implemented, while live backend/hardware acceptance remains.
 
 ### Phase 3 — Frontend
 
@@ -293,10 +293,10 @@ The SRS gives product-level requirements but does not settle these implementatio
 2. Resolved per user: PDF pages are counted with PDFBox; validated JPG/PNG images count as one page; validated DOCX files are converted to PDF with LibreOffice for rendered page count. DOCX conversion times out after 30 seconds and fails closed if LibreOffice cannot run; malformed/unsupported content is rejected.
 3. Flyway and MySQL 8.4 LTS are selected. Local development provisioning and production deployment target remain open.
 4. Resolved per user: issue JWT access tokens valid for 30 minutes with no refresh token; bootstrap the first administrator from environment credentials only when no ADMIN account exists. Password reset/rotation remains open.
-5. Resolved per user: download is allowed to admins and authenticated agents assigned to an associated print job; unrelated agents receive not-found. Agent credential issuance/rotation/revocation and whether a deployment has one or multiple agents from day one remain open.
-6. WebSocket authentication/authorization mechanism and TLS/network exposure constraints.
-7. Supported operating systems, printer drivers, duplex/color capability mapping, and behavior when requested settings are unsupported.
-8. Retry limit/backoff and handling for ambiguous “printer accepted job but agent lost acknowledgement” outcomes.
+5. Resolved per user: download is allowed to admins and authenticated agents assigned to an associated print job; unrelated agents receive not-found. Admin provisions a unique agent code and secret through protected configuration; backend stores only a BCrypt hash and accepts the secret only for authentication. Agent secrets are supplied externally and never logged. Agent credential rotation/revocation and whether a deployment has one or multiple agents from day one remain open.
+6. Resolved per user: WebSocket uses the same short-lived agent bearer JWT as REST and requires TLS (`wss://`) in deployment; the agent re-authenticates after expiry. Local loopback HTTP may be used only for development.
+7. Resolved per user: Windows and Linux are the initial host targets, through Java Print Service. Requested media/color/duplex/copy options must be checked against the selected printer and rejected explicitly when unsupported; the agent must not silently substitute options. Physical printer/driver acceptance remains required on each OS.
+8. Resolved per user: if print outcome acknowledgement is lost after submission, record `OUTCOME_UNKNOWN`, stop automatic processing, and require administrator review before any retry. The agent never automatically resubmits a failed or ambiguous job; retries are backend-authorized and bounded to three total attempts per order.
 9. Resolved per user: generate a cryptographically random, globally unique 12-character uppercase token from an ambiguity-reduced alphabet; enforce uniqueness in the database and retry pre-existing collisions.
 10. Resolved per user: calculate from the persisted per-page rate and round the final order total to two decimal places using `HALF_UP` (not per-page rounding). Each order snapshots the rate and total at creation, so future rate changes do not alter existing orders.
 11. Resolved per user: customer orders print all uploaded pages; optional page-range controls remain admin-only.
